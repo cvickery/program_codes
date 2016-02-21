@@ -4,3 +4,5 @@
 *files
 *.raw
 *.gsheet
+# added by GitSavvy
+/Icon
