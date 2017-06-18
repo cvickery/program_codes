@@ -16,17 +16,18 @@ ymd=`date +%Y-%m-%d`
 program_codes=`curl --data "SEARCHES=1&instid=334000" http://www.nysed.gov/coms/rp090/IRPS2A 2>/dev/null |\
    sed -n 's/.*PROGCD=\([0-9]*\).*/\1/p'`
 num_codes=`echo $program_codes|wc -w`
-echo "There are $num_codes program codes"
+echo "There are $num_codes program codes."
 for program_code in $program_codes
 do
  (( n = n + 1 ))
-  echo "Retrieving info for program code $n/$num_codes: $program_code"
+  printf "Retrieving info for program code %s (%d/%d)\r"  $program_code $n $num_codes
 #  curl http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD=$program_code >> program_codes.raw
  curl http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD=$program_code 2>/dev/null | \
  ack "$program_code |FOR AWARD|PROGRAM FIN|PROGRAM PRO|CERTIFICATE|QUEENS" | \
  sed 's/<H4><PRE>//' >> program_codes.out
 done
-echo "Retrieved info for $n program codes"
+echo
+echo "Retrieved info for $n program codes."
 
 # Generate spreadsheet from the program_codes.out file
 ./program_codes.py

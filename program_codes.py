@@ -269,7 +269,7 @@ with open('program_codes.out') as fp:
       # Multiple institutions, if any
       if minst_line and minst_award == for_award:
         key = Key(program_code,
-                  program_name,
+                  re.sub('  +', ' ', program_name),
                   minst_hegis,
                   minst_award,
                   minst_institution)
@@ -286,7 +286,7 @@ with open('program_codes.out') as fp:
       # Programs without multiple institutions or awards
       if program_award == for_award:
         key = Key(program_code,
-                  program_name,
+                  re.sub('  +', ' ', program_name),
                   program_hegis,
                   program_award,
                   program_institution)
@@ -329,6 +329,6 @@ for key in sorted(records.keys()):
     cell = ws.cell(row = row, column = col + len(key) + 1)
     cell.value = records[key][col]
 wb.save('program_codes.xlsx')
-print('Processed {} lines.\nFound {} distinct program codes and {} duplicate program codes'\
+print('Processed {} lines.\nFound {} distinct program codes and {} duplicate program codes.'\
       .format(line_num, len(program_codes), num_dupes))
-print('Generated', len(records), 'records')
+print('Generated', len(records), 'records.')
