@@ -38,8 +38,11 @@ Deductions, based on examination of the program_codes.out file:
       is "NON GRANTING" there is no HEGIS code for that institution.
 
 Input file structure:
-  One program code line
+  One program code line: code number; program title; hegis; award; institution
   Zero or more M/I or M/A lines
+    M/I WITH - - - ... -> hegis (may be empty); award (may be NOT-GRANTING); institution
+      If there is an award other than NOT-GRANTING, it gets added to the list of awards for the
+      program, and there must be one FOR AWARD line for each award in this list.
   For each award:
     For award (BA, MA, etc.)
       Program first and last registration dates
