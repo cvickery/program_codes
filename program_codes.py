@@ -107,7 +107,7 @@ def detail_lines(all_lines, program_code):
   """
   lines = all_lines.splitlines()
   for line in lines:
-    if re.search(f'$program_code|FOR AWARD|PROGRAM|PROGRAM|CERTIFICATE|QUEENS',
+    if re.search(f'$program_code|FOR AWARD|PROGRAMi|CERTIFICATE|QUEENS',
                  line):
       if args.debug:
         print(line)
@@ -127,39 +127,71 @@ def fix_title(str):
              .replace('Cuny', 'CUNY'))
 
 
-""" Input line types, determined from the first token on the line.
-"""
+class Program:
+  def __init(self, program_code, title, hegis, award, unit_code):
+    self.program_code = program_code
+    self.title = title
+    self.hegis = hegis
+    self.award = award
+    self.unit_code = unit_code
+    self.other_institutions = []
+
+  def __str__():
+    return'{:05}: {} ({}) {}'.format(self.program_code,
+                                     self.title,
+                                     self.award,
+                                     ', '.join(other_institutions))
+
+
+def dispatch(current_program, present_state, line):
+  """ Select next function.
+  """
+  if present_state in states:
+    if line.replace('/', ' ').split()[0] in line_types:
+      return dispatch_table[present_state, line_type](current_program, line)
+    else:
+      raise ValueError(f'Invalid line type: {line}')
+  else:
+    raise ValueError(f'Invalid state: {present_state}')
+
+
+def program(line):
+  """ Extract program code #, name, hegis, award, and institution.
+  """
+
+
+# Detail line types, determined from the first token on the line.
+# These are also the names of the functions that will handle these types of lines.
 line_type = Enum('Line Type', """
                  program
-                 program_dates
-                 multiple_awards
-                 multiple_institutions
-                 for_award
-                 certificate_etc
-                 financial_aid
+                 date
+                 award
+                 institution
+                 for
+                 certificate
+                 financial
                  accreditation""")
 
-
-Key = namedtuple('Key', """
-                 program_code
-                 program_name
-                 hegis_code
-                 award
-                 institution""")
-Record = namedtuple('Record', """
-                    first_date
-                    last_date
-                    cert_name
-                    cert_type
-                    cert_date
-                    tap_eligible
-                    apts_eligible
-                    vvta_eligible
-                    accreditation
-                    unit_code""")
+# Key-Value pairs will be the information in the records (rows) of the generated spreadsheet.
+Program_Key = namedtuple('Program_Key', """
+                                        program_code
+                                        program_name
+                                        hegis_code
+                                        award
+                                        unit_code""")
+Program_Details = namedtuple('Program_Details', """
+                                                first_date
+                                                last_date
+                                                cert_name
+                                                cert_type
+                                                cert_date
+                                                tap_eligible
+                                                apts_eligible
+                                                vvta_eligible
+                                                accreditation""")
 records = dict()
 
-MAW_line = namedtuple('MAW_line', 'name, hegis, award, institution')
+MA_line = namedtuple('MA_line', 'name, hegis, award, institution')
 Certs_etc = namedtuple('Certs_etc', 'name type date')
 Certs_etc.__new__.__defaults__ = (None,) * len(Certs_etc._fields)
 
@@ -171,11 +203,14 @@ print('Fetching program code ids and their unit codes', file=sys.stderr)
 r = requests.post('http://www.nysed.gov/coms/rp090/IRPS2A', data={'SEARCHES': '1',
                                                                   'instid': '33400'})
 html_document = document_fromstring(r.content)
-# the program codes and unit codes are inside H4 elements, which alternate: first a program code
-# line then, later, a separate unit code. For example:
+# the program codes and unit codes are inside H4 elements, in the following sequence:
 #   PROGRAM CODE  : 36256 - ...
-#   UNIT CODE     : OCUE
-h4s = [h4.text_content() for h4 in html_document.cssselect('h4') if 'CODE' in h4.text_content()]
+#   PROGRAM TITLE : [title text] AWARD : [award text]
+#   INST.NAME ...
+#   FORMAT ...
+#   UNIT CODE     : OCUE|OP
+h4s = [h4.text_content() for h4 in html_document.cssselect('h4') if re.match('CODE|TITLE',
+                                                                             h4.text_content())]
 # [Waiting for assignment expressions in python 3.8 (PEP 572)]
 # h4s = [h4_line for h4 in html_document.cssselect('h4') if 'CODE' in h4_line := h4.text_content()]
 
@@ -212,10 +247,10 @@ for program_code in unit_codes.keys():
         file=sys.stderr,
         end='')
   for line in detail_lines(r.text, program_code):
-    # Use the first token on a line to determine the type of line
+    # Use the first token on a line to determine the type of line, and dispatch to proper handler.
     prev_type = this_type
-    tokens = line.split()
-    token = tokens[0]
+    token = line.replace('/'. ' ').split()[0]
+
 
     if token.isdecimal():
       # There is a number (Program Code No.) at the beginning, so this is a line_type.program
@@ -267,10 +302,10 @@ for program_code in unit_codes.keys():
       multiple_award_hegis = matches.group(2)
       multiple_award_award = matches.group(3).strip()
       multiple_award_institution = fix_title(matches.group(4))
-      multiple_award_line = MAW_line(multiple_award_name,
-                                     multiple_award_hegis,
-                                     multiple_award_award,
-                                     multiple_award_institution)
+      multiple_award_line = MA_line(multiple_award_name,
+                                    multiple_award_hegis,
+                                    multiple_award_award,
+                                    multiple_award_institution)
       if multiple_award_line in multiple_award_lines:
         print('line {}: duplicate M/A ({}) for program code {}'
               .format(prog_code_num, multiple_award_line, program_code), file=sys.stderr)
@@ -358,9 +393,9 @@ for program_code in unit_codes.keys():
         print('line {}: unexpected financial_aid line'.format(prog_code_num), file=sys.stderr)
       # Extract three booleans.
       if_tap = line[54:57] == 'YES'
-      if_apts = line[66:69] == 'YES'
-      if_vvta = line[77:80] == 'YES'
-      fin_aid = Financial_aid(if_tap, if_apts, if_vvta)
+      #apts = line[66:69] == 'YES'
+      # vta = line[77:80] == 'YES'
+      _aid = Financial_aid(if_tap, if_apts, if_vvta)
 
     if token == 'PROGRAM' and tokens[1] == 'PROFESSIONAL':
       # line_type.accreditation
@@ -371,14 +406,15 @@ for program_code in unit_codes.keys():
       # Extract text, if any.
       accreditation = line[45:].strip()
 
-      # Observation: every program's section ends with an accreditation line.
+      #bservation: ever""" Key-Value pairs will be the information in the rows of the generated spreadsheet.
+      y program's section ends with an accreditation line.
       #
       # Generate record(s) for this program.
       #
 
       # Assemble the data record
       #   cert_name cert_type cert_date tap_eligible apts_eligible vvta_eligible accreditation
-      data_record = Record(cert.name, cert.type, cert.date,
+      data_record = Value(cert.name, cert.type, cert.date,
                            fin_aid.tap, fin_aid.apts, fin_aid.vvta,
                            accreditation, unit_code)
 
