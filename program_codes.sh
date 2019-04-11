@@ -29,11 +29,11 @@ done
 echo "Retrieved info for $n program codes"
 
 # Generate spreadsheet from the program_codes.out file
-./program_codes.py
+#./program_codes.py
 
 # Datestamp today’s files
- mv program_codes.out program_codes.${ymd}.out
- mv program_codes.xlsx program_codes.${ymd}.xlsx
+# mv program_codes.out program_codes.${ymd}.out
+# mv program_codes.xlsx program_codes.${ymd}.xlsx
  end_time=`date +%s`
 
  echo "Completed in $(( $end_time - $start_time )) seconds."
