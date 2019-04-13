@@ -9,3 +9,5 @@
 
 # added by GitSavvy
 /Icon
+
+/__pycache__/
