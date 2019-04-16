@@ -91,8 +91,9 @@ import requests
 from lxml.html import document_fromstring
 import cssselect
 
-from openpyxl import Workbook
-from openpyxl.styles import Font
+import csv
+
+from program import Program
 
 __author__ = 'Christopher Vickery'
 __version__ = 'April 2019'
@@ -117,7 +118,7 @@ def detail_lines(all_lines, program_code):
 def fix_title(str):
   """ Create a better titlecase string, taking specifics of this dataset into account.
   """
-  return (str.strip()
+  return (str.strip(' *')
              .title()
              .replace('Mhc', 'MHC')
              .replace('\'S', '’s')
@@ -125,22 +126,6 @@ def fix_title(str):
              .replace('6Th', '6th')
              .replace(' And ', ' and ')
              .replace('Cuny', 'CUNY'))
-
-
-class Program:
-  def __init(self, program_code, title, hegis, award, unit_code):
-    self.program_code = program_code
-    self.title = title
-    self.hegis = hegis
-    self.award = award
-    self.unit_code = unit_code
-    self.other_institutions = []
-
-  def __str__():
-    return'{:05}: {} ({}) {}'.format(self.program_code,
-                                     self.title,
-                                     self.award,
-                                     ', '.join(other_institutions))
 
 
 def dispatch(current_program, present_state, line):
@@ -177,8 +162,8 @@ Program_Key = namedtuple('Program_Key', """
                                         program_code
                                         program_name
                                         hegis_code
-                                        award
-                                        unit_code""")
+                                        unit_code
+                                        award""")
 Program_Details = namedtuple('Program_Details', """
                                                 first_date
                                                 last_date
@@ -199,39 +184,50 @@ Financial_aid = namedtuple('Financial_aid', 'tap apts vvta')
 Financial_aid.__new__.__defaults__ = (False,) * len(Financial_aid._fields)
 
 # Fetch the web page with all QC program codes and their unit codes
-print('Fetching program code ids and their unit codes', file=sys.stderr)
+print('Fetching list of registered programs ...', file=sys.stderr)
 r = requests.post('http://www.nysed.gov/coms/rp090/IRPS2A', data={'SEARCHES': '1',
                                                                   'instid': '33400'})
 html_document = document_fromstring(r.content)
 # the program codes and unit codes are inside H4 elements, in the following sequence:
 #   PROGRAM CODE  : 36256 - ...
 #   PROGRAM TITLE : [title text] AWARD : [award text]
-#   INST.NAME ...
-#   FORMAT ...
+#   INST.NAME/CITY ... (Includes hegis, but get that from details; ignored.)
+#   FORMAT ... (Not always present; ignored.)
 #   UNIT CODE     : OCUE|OP
-h4s = [h4.text_content() for h4 in html_document.cssselect('h4') if re.match('CODE|TITLE',
-                                                                             h4.text_content())]
+h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
 # [Waiting for assignment expressions in python 3.8 (PEP 572)]
 # h4s = [h4_line for h4 in html_document.cssselect('h4') if 'CODE' in h4_line := h4.text_content()]
 
-unit_codes = dict()
-previous_code_type = object()
-previous_code_value = None
+programs = []
+current_program = None
 for h4 in h4s:
   if args.debug:
     print(h4)
-  matches = re.search(r'(PROGRAM|UNIT)\s+CODE\s+:\s+(\S+)', h4)
-  this_code_type = matches.group(1)
-  this_code_value = matches.group(2)
-  if this_code_type is None or this_code_type == previous_code_type:
-    sys.exit(f'Invalid h4 sequence: code type is {this_code_type}')
-  if this_code_type == 'UNIT':
-    unit_codes[previous_code_value] = this_code_value
-  previous_code_type = this_code_type
-  previous_code_value = this_code_value
 
-print(f'Found {len(unit_codes.keys())} distinct program codes\nFetching details...',
+  if 'PROGRAM CODE' in h4 and 'PROGRAM TITLE ORDER' not in h4:
+    if current_program is not None:
+      if args.debug:
+        print(current_program)
+      programs.append(current_program)
+    matches = re.match(r'^\s*PROGRAM CODE\s*:\s*(\d+).+PROGRAM TITLE\s*:\s*(.*)\s*AWARD\s*:\s*(.+)',
+                       h4)
+    assert matches is not None, f'Unrecognized program code line: {h4}'
+    current_program = Program(int(matches.group(1)),
+                              title=fix_title(matches.group(2)),
+                              award=matches.group(3).strip())
+
+  if 'UNIT CODE' in h4:
+    matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
+    assert matches is not None, f'Unrecognized unit code line: {h4}'
+    current_program.unit_code = matches.group(1).strip()
+
+if current_program is not None:
+  programs.append(current_program)
+print(f'Found {len(programs)} registered programs\nFetching details...',
       file=sys.stderr)
+for program in programs:
+  print(program)
+exit()
 
 prog_code_num = 0
 this_type = line_type.accreditation
@@ -249,8 +245,7 @@ for program_code in unit_codes.keys():
   for line in detail_lines(r.text, program_code):
     # Use the first token on a line to determine the type of line, and dispatch to proper handler.
     prev_type = this_type
-    token = line.replace('/'. ' ').split()[0]
-
+    token = line.replace('/', ' ').split()[0]
 
     if token.isdecimal():
       # There is a number (Program Code No.) at the beginning, so this is a line_type.program
@@ -392,8 +387,8 @@ for program_code in unit_codes.keys():
          prev_type != line_type.for_award:
         print('line {}: unexpected financial_aid line'.format(prog_code_num), file=sys.stderr)
       # Extract three booleans.
-      if_tap = line[54:57] == 'YES'
-      #apts = line[66:69] == 'YES'
+      # if_tap = line[54:57] == 'YES'
+      # apts = line[66:69] == 'YES'
       # vta = line[77:80] == 'YES'
       _aid = Financial_aid(if_tap, if_apts, if_vvta)
 
@@ -406,17 +401,11 @@ for program_code in unit_codes.keys():
       # Extract text, if any.
       accreditation = line[45:].strip()
 
-      #bservation: ever""" Key-Value pairs will be the information in the rows of the generated spreadsheet.
-      y program's section ends with an accreditation line.
-      #
-      # Generate record(s) for this program.
-      #
-
       # Assemble the data record
       #   cert_name cert_type cert_date tap_eligible apts_eligible vvta_eligible accreditation
       data_record = Value(cert.name, cert.type, cert.date,
-                           fin_aid.tap, fin_aid.apts, fin_aid.vvta,
-                           accreditation, unit_code)
+                          fin_aid.tap, fin_aid.apts, fin_aid.vvta,
+                          accreditation, unit_code)
 
       # Generate all distinct keys for this award for this program code
       keys = set()
