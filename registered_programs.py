@@ -198,34 +198,24 @@ h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
 # [Waiting for assignment expressions in python 3.8 (PEP 572)]
 # h4s = [h4_line for h4 in html_document.cssselect('h4') if 'CODE' in h4_line := h4.text_content()]
 
-programs = []
-current_program = None
 for h4 in h4s:
   if args.debug:
     print(h4)
 
   if 'PROGRAM CODE' in h4 and 'PROGRAM TITLE ORDER' not in h4:
-    if current_program is not None:
-      if args.debug:
-        print(current_program)
-      programs.append(current_program)
-    matches = re.match(r'^\s*PROGRAM CODE\s*:\s*(\d+).+PROGRAM TITLE\s*:\s*(.*)\s*AWARD\s*:\s*(.+)',
-                       h4)
+    matches = re.match(r'^\s*PROGRAM CODE\s*:\s*(\d+)', h4)
     assert matches is not None, f'Unrecognized program code line: {h4}'
-    current_program = Program(int(matches.group(1)),
-                              title=fix_title(matches.group(2)),
-                              award=matches.group(3).strip())
+    p = Program(matches.group(1))
 
   if 'UNIT CODE' in h4:
     matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
     assert matches is not None, f'Unrecognized unit code line: {h4}'
-    current_program.unit_code = matches.group(1).strip()
+    p.unit_code = matches.group(1).strip()
 
-if current_program is not None:
-  programs.append(current_program)
-print(f'Found {len(programs)} registered programs\nFetching details...',
+
+print(f'Found {len(Program.programs)} registered programs\nFetching details...',
       file=sys.stderr)
-for program in programs:
+for program in Program.programs:
   print(program)
 exit()
 
