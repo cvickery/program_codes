@@ -94,13 +94,19 @@ import cssselect
 import csv
 
 from program import Program
+from cuny_institutions import cuny_institutions
 
 __author__ = 'Christopher Vickery'
 __version__ = 'April 2019'
 
 parser = argparse.ArgumentParser()
+parser.add_argument('institution', nargs='?', default='qns')
 parser.add_argument('-d', '--debug', action='store_true', default=False)
+parser.add_argument('-v', '--verbose', action='store_true', default=False)
 args = parser.parse_args()
+
+institution = args.institution.lower().strip('10')
+institution_id, institution_name = cuny_institutions[institution]
 
 
 def detail_lines(all_lines, program_code):
@@ -108,7 +114,7 @@ def detail_lines(all_lines, program_code):
   """
   lines = all_lines.splitlines()
   for line in lines:
-    if re.search(f'$program_code|FOR AWARD|PROGRAMi|CERTIFICATE|QUEENS',
+    if re.search(f'{program_code}|FOR AWARD|PROGRAM|CERTIFICATE|QUEENS',
                  line):
       if args.debug:
         print(line)
@@ -184,9 +190,10 @@ Financial_aid = namedtuple('Financial_aid', 'tap apts vvta')
 Financial_aid.__new__.__defaults__ = (False,) * len(Financial_aid._fields)
 
 # Fetch the web page with all QC program codes and their unit codes
-print('Fetching list of registered programs ...', file=sys.stderr)
+if args.verbose:
+  print(f'Fetching list of registered programs for {institution_name} ...', file=sys.stderr)
 r = requests.post('http://www.nysed.gov/coms/rp090/IRPS2A', data={'SEARCHES': '1',
-                                                                  'instid': '33400'})
+                                                                  'instid': f'{institution_id}'})
 html_document = document_fromstring(r.content)
 # the program codes and unit codes are inside H4 elements, in the following sequence:
 #   PROGRAM CODE  : 36256 - ...
@@ -199,9 +206,6 @@ h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
 # h4s = [h4_line for h4 in html_document.cssselect('h4') if 'CODE' in h4_line := h4.text_content()]
 
 for h4 in h4s:
-  if args.debug:
-    print(h4)
-
   if 'PROGRAM CODE' in h4 and 'PROGRAM TITLE ORDER' not in h4:
     matches = re.match(r'^\s*PROGRAM CODE\s*:\s*(\d+)', h4)
     assert matches is not None, f'Unrecognized program code line: {h4}'
@@ -211,37 +215,26 @@ for h4 in h4s:
     matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
     assert matches is not None, f'Unrecognized unit code line: {h4}'
     p.unit_code = matches.group(1).strip()
+if args.verbose:
+  print(f'Found {len(Program.programs)} registered programs.', file=sys.stderr)
+  print('Fetching details...', file=sys.stderr)
 
-
-print(f'Found {len(Program.programs)} registered programs\nFetching details...',
-      file=sys.stderr)
-for program in Program.programs:
-  print(program)
-exit()
-
-prog_code_num = 0
-this_type = line_type.accreditation
-prev_type = object()
-num_dupes = 0
-program_codes = set()
-
-for program_code in unit_codes.keys():
-  unit_code = unit_codes[program_code]
-  r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program_code}')
-  prog_code_num += 1
-  print(f'Program_code {prog_code_num}/{len(unit_codes.keys())}: {program_code}\r',
-        file=sys.stderr,
-        end='')
-  for line in detail_lines(r.text, program_code):
+programs_counter = 0
+for p in Program.programs:
+  program = Program.programs[p]
+  programs_counter += 1
+  r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
+  for line in detail_lines(r.text, program.program_code):
     # Use the first token on a line to determine the type of line, and dispatch to proper handler.
+    continue
     prev_type = this_type
     token = line.replace('/', ' ').split()[0]
 
+    # There is a number (Program Code No.) at the beginning, so this is a line_type.program
     if token.isdecimal():
-      # There is a number (Program Code No.) at the beginning, so this is a line_type.program
       this_type = line_type.program
       if prev_type is not line_type.accreditation:
-        print(f'line {prog_code_num}: unexpected program code line')
+        print(f'line {programs_counter}: unexpected program code line')
       # Extract program_code, program_name, hegis_code, award, institution. Note: allow a single
       # space in the award string ---------------------> vvvvvvvvv
       matches = re.match(r'\s*(\d+)(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
@@ -253,10 +246,10 @@ for program_code in unit_codes.keys():
       program_hegis = matches.group(3)
       program_award = matches.group(4).strip()
       program_institution = fix_title(matches.group(5))
-      # Check for duplicated program code;
       if program_code in program_codes:
+        # Check for duplicated program code;
         if args.debug:
-          print('line {}: duplicate program code: {}'.format(prog_code_num, program_code))
+          print('line {}: duplicate program code: {}'.format(programs_counter, program_code))
         num_dupes = num_dupes + 1
       program_codes.add(program_code)
 
@@ -276,9 +269,8 @@ for program_code in unit_codes.keys():
       # There may be multiple M/A (multiple award) lines per program code
       this_type = line_type.multiple_awards
       if prev_type is not line_type.program and \
-         prev_type is not line_type.multiple_awards and \
          prev_type is not line_type.multiple_institutions:
-        print('line {}: unexpected M/A line'.format(prog_code_num), file=sys.stderr)
+        print('line {}: unexpected M/A line'.format(programs_counter), file=sys.stderr)
       # Extract name, hegis, award, and institution
       matches = re.match(r'\s*M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
       if matches is None:
@@ -293,7 +285,7 @@ for program_code in unit_codes.keys():
                                     multiple_award_institution)
       if multiple_award_line in multiple_award_lines:
         print('line {}: duplicate M/A ({}) for program code {}'
-              .format(prog_code_num, multiple_award_line, program_code), file=sys.stderr)
+              .format(programs_counter, multiple_award_line, program_code), file=sys.stderr)
       multiple_award_lines.add(multiple_award_line)
       multiple_award_awards.add(multiple_award_award)  # For quick lookup
       if args.debug:
@@ -310,11 +302,9 @@ for program_code in unit_codes.keys():
       # line with an award per program code. There might be multiple M/I lines
       # but no more than one of them has an award. If this ever changes, this
       # section of the code will have to be updated to work like M/A lines.
-      this_type = line_type.multiple_institutions
       if prev_type is not line_type.program and \
-         prev_type is not line_type.multiple_awards and\
          prev_type is not line_type.multiple_institutions:
-        print('line {}: unexpected M/I line'.format(prog_code_num), file=sys.stderr)
+        print('line {}: unexpected M/I line'.format(programs_counter), file=sys.stderr)
       # Extract hegis, award, institution
       #   But there is no hegis if the award is NOT-GRANTING
       if 'NOT-GRANTING' in line:
@@ -326,10 +316,10 @@ for program_code in unit_codes.keys():
         if matches is None:
           sys.exit(f'Unable to parse M/I line for program code {program_code}:\n{line}')
         multiple_institution_hegis = matches.group(1)
-        multiple_institution_award = matches.group(2)
         if multiple_institution_award:
+          multiple_institution_award = matches.group(2)
           if multiple_institution_line:
-            print(f'line {prog_code_num}: second M/I line for program code {program_code}:\n{line}',
+            print(f'line {programs_counter}: second M/I line for program code {program_code}:\n{line}',
                   file=sys.stderr)
           multiple_institution_institution = fix_title(matches.group(3))
           multiple_institution_line = True
@@ -344,24 +334,24 @@ for program_code in unit_codes.keys():
       #
       this_type = line_type.for_award
       if prev_type is not line_type.program and \
-         prev_type != line_type.multiple_awards and \
          prev_type != line_type.multiple_institutions and\
+         prev_type != line_type.multiple_awards and \
          prev_type != line_type.accreditation:
-        print('line {}: unexpected for_award line'.format(prog_code_num), file=sys.stderr)
+        print('line {}: unexpected for_award line'.format(programs_counter), file=sys.stderr)
       # Extract award (is it in the set of awards extracted from program and m/a lines?)
-      for_award = re.match(r'\s*FOR AWARD\s*--(.*)', line).group(1).strip()
       if for_award != program_award and for_award not in multiple_award_awards:
+        for_award = re.match(r'\s*FOR AWARD\s*--(.*)', line).group(1).strip()
         # fatal, but why? how does multiple_award_awards know until it sees this?
         print('line {}: FOR award ({}) not in multiple_award_awards ({})'
-              .format(prog_code_num, for_award, multiple_award_awards), file=sys.stderr)
+              .format(programs_counter, for_award, multiple_award_awards), file=sys.stderr)
         exit()
 
     if token == 'CERTIFICATE/LICENSES':
       # line_type.certificate_etc
-      #
       this_type = line_type.certificate_etc
+      #
       if prev_type != line_type.for_award:
-        print('line{}: unexpected certificate_etc line'.format(prog_code_num), file=sys.stderr)
+        print('line{}: unexpected certificate_etc line'.format(programs_counter), file=sys.stderr)
       # Extract certificate tuple {name, type, date} if there is one.
       cert_info = line[47:].strip()
       if cert_info.startswith('NONE'):
@@ -372,10 +362,9 @@ for program_code in unit_codes.keys():
     if token == 'PROGRAM' and tokens[1] == 'FINANCIAL':
       # line_type.financial_aid
       #
-      this_type = line_type.financial_aid
       if prev_type != line_type.certificate_etc and\
          prev_type != line_type.for_award:
-        print('line {}: unexpected financial_aid line'.format(prog_code_num), file=sys.stderr)
+        print('line {}: unexpected financial_aid line'.format(programs_counter), file=sys.stderr)
       # Extract three booleans.
       # if_tap = line[54:57] == 'YES'
       # apts = line[66:69] == 'YES'
@@ -384,10 +373,10 @@ for program_code in unit_codes.keys():
 
     if token == 'PROGRAM' and tokens[1] == 'PROFESSIONAL':
       # line_type.accreditation
-      #
       this_type = line_type.accreditation
+      #
       if prev_type != line_type.financial_aid:
-        print('line {}: unexpected accreditation line'.format(prog_code_num), file=sys.stderr)
+        print('line {}: unexpected accreditation line'.format(programs_counter), file=sys.stderr)
       # Extract text, if any.
       accreditation = line[45:].strip()
 
@@ -476,9 +465,9 @@ for key in sorted(records.keys()):
     cell = ws.cell(row=row, column=col + 1)
     cell.value = key[col]
   for col in range(len(records[key])):
-    cell = ws.cell(row=row, column=col + len(key) + 1)
     cell.value = records[key][col]
+    cell = ws.cell(row=row, column=col + len(key) + 1)
 wb.save('program_codes.xlsx')
 print('Processed {} lines.\nFound {} distinct program codes and {} duplicate program codes'
-      .format(prog_code_num, len(program_codes), num_dupes))
+      .format(programs_counter, len(program_codes), num_dupes))
 print('Generated', len(records), 'records')
