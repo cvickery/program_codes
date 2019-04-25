@@ -1,4 +1,4 @@
-class Program:
+class Program(object):
   """ For each QC program registered with NYS Department of Education, collect information about the
       program scraped from the DoE website.
       Some programs appear more than once, so a class list of programs instances prevents duplicate
@@ -9,11 +9,14 @@ class Program:
               'Award',
               'HEGIS',
               'Unit Code',
+              'First Registration Date',
+              'Last Registration Date',
+              'Certificate or License',
               'TAP', 'APTS', 'VVTA',
               'Other Institution']
 
-  # The programs dict is indexed by program_code. There is only one instance of this class per
-  # program code.
+  # The (public) programs dict is indexed by program_code. There is only one instance of this class
+  # per program code.
   programs = {}
 
   def __new__(self, program_code):
@@ -54,7 +57,7 @@ class Program:
     """
     if columns is None:
       columns = self.headings
-    attributes = [h.lower().replace(' ', '_') for h in columns]
+    attributes = [h.lower().replace(' or ', '_').replace(' ', '_') for h in columns]
     # if 'awards' in attributes:
     #   attributes[attributes.index('awards')] = '__awards'
     return[getattr(self, col) for col in attributes]
