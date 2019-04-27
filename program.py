@@ -1,14 +1,14 @@
 from recordclass import recordclass
 
-items = ['institution',
-         'title',
-         'hegis',
-         'first_registration_date',
-         'last_registration_date',
-         'tap', 'apts', 'vvta',
-         'certificate_license',
-         'accreditation']
-award_info = recordclass('Award_Info', items)
+_items = ['institution',
+          'title',
+          'hegis',
+          'first_registration_date',
+          'last_registration_date',
+          'tap', 'apts', 'vvta',
+          'certificate_license',
+          'accreditation']
+_award_info = recordclass('Award_Info', _items)
 
 
 class Program(object):
@@ -22,15 +22,15 @@ class Program(object):
       beta ... but seems to be under active development.
   """
 
-  headings = ['Institution',
-              'Title',
-              'Award',
-              'HEGIS',
-              'Certificate or License',
-              'Accreditation',
-              'First Registration Date',
-              'Last Registration Date',
-              'TAP', 'APTS', 'VVTA']
+  _headings = ['Institution',
+               'Title',
+               'Award',
+               'HEGIS',
+               'Certificate or License',
+               'Accreditation',
+               'First Registration Date',
+               'Last Registration Date',
+               'TAP', 'APTS', 'VVTA']
 
   # The (public) programs dict is indexed by program_code. There is only one instance of this class
   # per program code.
@@ -55,14 +55,43 @@ class Program(object):
   @award.setter
   def award(self, award_str):
     if award_str not in self.awards.keys():
-      self.awards[award_str] = award_info._make([None] * len(items))
+      self.awards[award_str] = _award_info._make([None] * len(_items))
+
+  @classmethod
+  def html(this, institution, highlight_other=True):
+    table = '<table>'
+    table += '<tr><th>Program Code</th><th>Registered By</th>'
+    table += ''.join([f'<th>{head}</th>' for head in this._headings]) + '</tr>\n'
+    for p in this.programs:
+      program = this.programs[p]
+      awards = program.awards.keys()
+      for award in awards:
+        which_class = ''
+        if highlight_other and program.awards[award].institution.upper() != institution.upper():
+          which_class = ' class="other"'
+        table += f'<tr{which_class}><th>{program.program_code}</th><td>{program.unit_code}</td>'
+        table += ''.join([f'<td>{cell}</td>' for cell in program.values(award)]) + '</tr>\n'
+    table += '</table>'
+    return f"""
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>{institution} Registered Progams</title>
+        <link rel="stylesheet" href="./registered_program.css"/>
+      </head>
+      <body>
+        <h1>{institution} Registered Programs</h1>
+        {table}
+      </body>
+    </html>
+    """
 
   def values(self, award, headings=None):
     """ Given a list of column headings, yield the corresponding values for each award.
         Does not include program-wide values (program code and registration office’s unit code).
     """
     if headings is None:
-      headings = self.headings
+      headings = self._headings
     fields = [h.lower().replace(' or ', '_').replace(' ', '_') for h in headings]
     return [self.awards[award][field] if field != 'award' else award for field in fields]
 

@@ -291,7 +291,8 @@ if __name__ == '__main__':
           for award in program.awards.keys():
             writer.writerow([program.program_code, program.unit_code] + program.values(award))
     if args.html:
-      print('HTML option not implemented yet.', file=sys.stderr)
+      print(Program.html(institution.upper()))
+
     if args.update_db:
       print('Database not implemented yet.', file=sys.stderr)
   else:
