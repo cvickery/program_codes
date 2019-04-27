@@ -1,12 +1,11 @@
 *.xlsx
+*.csv
+*.numbers
 *.out
 *.html
 *files
 *.raw
 *.gsheet
-# added by GitSavvy
-/Icon
-
 # added by GitSavvy
 /Icon
 
