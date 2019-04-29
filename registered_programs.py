@@ -29,8 +29,11 @@ import cssselect
 
 import csv
 
+import psycopg2
+from psycopg2.extras import NamedTupleCursor
+
 from program import Program
-from cuny_institutions import cuny_institutions
+from known_institutions import known_institutions
 
 __author__ = 'Christopher Vickery'
 __version__ = 'April 2019'
@@ -63,9 +66,9 @@ def fix_title(str):
 
 def lookup_programs(institution, verbose=False, debug=False):
   """ Scrape info about academic programs registered with NYS from the Department of Education
-      website.
+      website. Create a Program object for each program_code.
   """
-  institution_id, institution_name = cuny_institutions[institution]
+  institution_id, institution_name, is_cuny = known_institutions[institution]
 
   # Phase I: Get the program code, title, award, hegis, and unit code for all programs
   # registered for the institution.
@@ -77,38 +80,33 @@ def lookup_programs(institution, verbose=False, debug=False):
   # the program codes and unit codes are inside H4 elements, in the following sequence:
   #   PROGRAM CODE  : 36256 - ...
   #   PROGRAM TITLE : [title text] AWARD : [award text]
-  #   INST.NAME/CITY .[name and address, ignored].. HEGIS : [hegis text for this award]
+  #   INST.NAME/CITY .[name and address, ignored].. HEGIS : [hegis string for this award]
   #   FORMAT ... (Not always present; ignored.)
   #   UNIT CODE     : OCUE|OP
   h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
   # [Waiting for assignment expressions in python 3.8 (PEP 572)]
   this_award = None
   for h4 in h4s:
+
     matches = re.search(r'PROGRAM CODE\s+:\s+(\d+) -.+PROGRAM TITLE\s+:\s+(.+)AWARD : (\S+\s?\S*)',
                         h4)
     if matches:
       program_code = matches.group(1)
       p = Program(program_code)
+      this_title = fix_title(matches.group(2))
       this_award = matches.group(3).strip()
-      p.award = this_award
-      p.awards[this_award].title = fix_title(matches.group(2))
-      if debug:
-        print(f'program code {p.program_code}: “{p.awards[this_award].title}” ({p.award})')
-      continue
-
-    if 'UNIT CODE' in h4:
-      matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
-      assert matches is not None, f'Unrecognized unit code line: {h4}'
-      p.unit_code = matches.group(1).strip()
-      if debug:
-        print(f'unit code {p.program_code}: {p.unit_code}')
       continue
 
     matches = re.search(r'HEGIS : (\S+)', h4)
     if matches:
-      p.awards[this_award].hegis = matches.group(1)
-      if debug:
-        print(f'hegis {p.program_code} {this_award}: {p.awards[this_award].hegis}')
+      this_hegis = matches.group(1)
+      p.new_variant(this_award, this_hegis, title=this_title)
+      continue
+
+    if 'UNIT CODE' in h4:
+      matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
+      assert matches is not None, f'\nUnrecognized unit code line: {h4}'
+      p.unit_code = matches.group(1).strip()
       continue
 
   if verbose:
@@ -117,26 +115,33 @@ def lookup_programs(institution, verbose=False, debug=False):
     print(f'Found {num_programs} registered programs.', file=sys.stderr)
     print('Fetching details...', file=sys.stderr)
 
-# Phase II: Get the details for each program found in Phase I
+  if debug:
+    for p in Program.programs:
+      program = Program.programs[p]
+      print(program.program_code, program.unit_code)
+      for v in program.variants:
+        print(v, program.values(v))
+
+  # Phase II: Get the details for each program found in Phase I
   programs_counter = 0
   for p in Program.programs:
     program = Program.programs[p]
     programs_counter += 1
     if verbose:
-      print(f'Program {programs_counter:{len_num}}/{num_programs}: code {p}\r',
+      print(f'Program code: {p} ({programs_counter:{len_num}}/{num_programs})\r',
             end='', file=sys.stderr)
 
     for_award = None
     r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
     for line in detail_lines(r.text):
-      # Use the first token on a line to determine the type of line, and dispatch to proper handler.
+      # Use the first token on a line to determine the type of line.
       tokens = line.split()
       token = tokens[0]
 
-      # There is a numeric string (Program Code #.) at the beginning.
-      if token.isdecimal():
+      # First token is a numeric string (Program Code #.).
+      if token.isdecimal() or token == 'M/A':
         # Extract program_code, title, hegis_code, award, institution.
-        matches = re.match(r'\s*\d+(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
+        matches = re.match(r'\s*\d+|M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
         if matches is None:
           sys.exit(f'\nUnable to parse program code line for program code {program_code}:\n{line}')
         # if Check the title and hegis for the award. Always set the institution.
@@ -144,48 +149,53 @@ def lookup_programs(institution, verbose=False, debug=False):
         program_hegis = matches.group(2)
         program_award = matches.group(3).strip()
         program_institution = matches.group(4)
-        if program_award not in program.award:
-          sys.exit(f'{program_award} not in {program.award}: {line}')
         if debug:
           print(f'{program.program_code}: "{program_title}" {program_hegis}'
                 f' {program_award} "{program_institution}"')
-        assert program_title == program.awards[program_award].title
-        assert program_hegis == program.awards[program_award].hegis
+        # Be sure this variant exists
+        this_variant = program.new_variant(program_award, program_hegis, title=program_title)
 
         if program_institution == institution_name:
-          program.awards[program_award].institution = institution.upper()
+          program.variants[this_variant].institution = institution.upper()
         else:
-          for key in cuny_institutions.keys():
-            if program_institution == cuny_institutions[key][1]:
-              program.awards[program_award].institution = key.upper()
+          for key in known_institutions.keys():
+            if program_institution == known_institutions[key][1]:
+              program.variants[this_variant].institution = key.upper()
               break
-        assert program.awards[program_award].institution is not None
+        assert program.variants[this_variant].institution is not None
         continue
 
-      if token == 'M/A':
-        # line_type.multiple_awards
-        # Extract title, hegis, award, and institution
-        matches = re.match(r'\s*M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
-        if matches is None:
-          sys.exit(f'\nUnable to parse M/A line for program code {program_code}:\n{line}')
-        program_title = fix_title(matches.group(1))
-        program_hegis = matches.group(2)
-        program_award = matches.group(3).strip()
-        program_institution = matches.group(4)
-        if debug:
-          print(f'{program.program_code}: "{program_title}" {program_hegis}'
-                f' {program_award} "{program_institution}"')
-        assert program_title == program.awards[program_award].title
-        assert program_hegis == program.awards[program_award].hegis
-        if program_institution == institution_name:
-          program.awards[program_award].institution = institution.upper()
-        else:
-          for key in cuny_institutions.keys():
-            if program_institution == cuny_institutions[key][1]:
-              program.awards[program_award].institution = key.upper()
-              break
-        assert program.awards[program_award].institution is not None
-        continue
+      # if token == 'M/A':
+      #   # line_type.multiple_awards
+      #   # Extract title, hegis, award, and institution
+      #   matches = re.match(r'\s*M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
+      #   if matches is None:
+      #     sys.exit(f'\nUnable to parse M/A line for program code {program_code}:\n{line}')
+      #   program_title = fix_title(matches.group(1))
+      #   program_hegis = matches.group(2)
+      #   program_award = matches.group(3).strip()
+      #   program_institution = matches.group(4)
+      #   if debug:
+      #     print(f'{program.program_code}: "{program_title}" {program_hegis}'
+      #           f' {program_award} "{program_institution}"')
+      #   # Be sure this variant exists
+      #   this_variant = program.new_variant(program_award, program_hegis, title=program_title)
+      #   if program_institution == institution_name:
+      #     program.variants[this_variant].institution = institution.upper()
+      #   else:
+      #     for key in known_institutions.keys():
+      #       if program_institution == known_institutions[key][1]:
+      #         program.variants[this_variant].institution = key.upper()
+      #         break
+      #   assert program.variants[this_variant].institution is not None
+      #   continue
+
+      """
+      It's a mess. Program variants are identified by award, hegis, AND institution. The M/I
+      lines, when the award is not NOT-GRANTING tell you when you need a new variant. Then the FOR
+      AWARD lines have to apply to all variants that share that award (even if they have different
+      hegis’s, I think.)
+      """
 
       if token == 'M/I':
         # # Multi-institution lines add no new information about a program because multi-award lines
@@ -212,8 +222,7 @@ def lookup_programs(institution, verbose=False, debug=False):
         # Extract award. The following lines will not be of interest unless the award is in the list
         # for this institution.
         for_award = re.match(r'\s*FOR AWARD\s*--(.*)', line).group(1).strip()
-        if for_award not in program.award:
-          for_award = None
+        assert for_award in program.awards, f'{for_award} not in {program.awards}'
 
       if token.startswith('CERTIFICATE') and for_award is not None:
         # Extract certificate tuple {name, type, date} if there is one.
@@ -264,7 +273,7 @@ if __name__ == '__main__':
                                    Scrape the NYS Department of Education website for information
                                    about academic programs registered for CUNY colleges.''',
                                    epilog='''
-                                   NOTE: HTML and Database options not implemented yet.''')
+                                   NOTE: Database option not implemented yet.''')
   parser.add_argument('institution')
   parser.add_argument('-u', '--update_db', action='store_true', default=False,
                       help='update info for this institution in the registered_programs database')
@@ -275,6 +284,9 @@ if __name__ == '__main__':
   parser.add_argument('-d', '--debug', action='store_true', default=False)
   parser.add_argument('-v', '--verbose', action='store_true', default=False)
   args = parser.parse_args()
+
+  if not args.debug and not args.csv and not args.html and not args.update_db:
+    sys.exit('No output options: nothing to do.')
 
   institution = args.institution.lower().strip('10')
   programs = lookup_programs(institution, debug=args.debug, verbose=args.verbose)
@@ -288,12 +300,28 @@ if __name__ == '__main__':
         writer.writerow(['Program Code', 'Registration Office'] + Program.headings)
         for p in Program.programs:
           program = programs[p]
-          for award in program.awards.keys():
-            writer.writerow([program.program_code, program.unit_code] + program.values(award))
+          for award, hegis in program.awards.keys():
+            writer.writerow([program.program_code, program.unit_code]
+                            + program.values(award, hegis))
     if args.html:
       print(Program.html(institution.upper()))
-
     if args.update_db:
-      print('Database not implemented yet.', file=sys.stderr)
+      db = psycopg2.connect('dbname=cuny_courses')
+      cursor = db.cursor(cursor_factory=NamedTupleCursor)
+      cursor.execute('delete from registered_programs where target_institution=%s',
+                     (institution,))
+      print('Replacing {} entries for {} with info for {} programs.'
+            .format(cursor.rowcount, institution.upper(), len(Program.programs)))
+      for p in Program.programs:
+        program = programs[p]
+        for award, hegis in program.awards.keys():
+          values = [institution,
+                    program.program_code,
+                    program.unit_code] + program.values(award, hegis)
+          cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
+                         + ')', values)
+      db.commit()
+      db.close()
+
   else:
     sys.exit('lookup_programs failed')
