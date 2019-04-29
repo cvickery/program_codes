@@ -1,5 +1,6 @@
 """ The Program class, which is a list of NYS-registered academic programs.
 """
+import re
 from recordclass import recordclass
 
 _items = ['institution',
@@ -11,19 +12,25 @@ _items = ['institution',
           'tap', 'apts', 'vvta',
           'certificate_license',
           'accreditation']
-_instance_info = recordclass('Instance_Info', _items)
+_variant_info = recordclass('Variant_Info', _items)
 
 
 class Program(object):
   """ For each program registered with NYS Department of Education, collect information about the
       program scraped from the DoE website.
+
       Some programs appear more than once, so a class list of programs instances prevents duplicate
       entries.
-      2019-04-25: Re-conceptualize: a program has a dict of info about an instances, indexed by
-      (award, hegis) tuples.
-      The info is maintained as a recordclass so the instance values can be updated as new records
-      are retrieved from nys. [A recordclass is like a namedtuple, but the values are mutable.
-      Problem is, recordclass is still in beta ... but seems to be under active development.]
+
+      A single program can have multiple variants, which differ in title, institution, award, and/or
+      hegis. Emprically, no two variants share both the same award and hegis combination, so that
+      pair is used as the key for a dictionary of per-variant values. All variants of a programs
+      share a single program code and unit code.
+
+      Variant info is maintained as a recordclass so the instance values can be updated as new
+      records are retrieved from nys. [A recordclass is like a namedtuple, but the values are
+      mutable. Problem is, recordclass is still in beta ... but seems to be under active
+      development.]
   """
 
   # Default heading strings for the html and values functions. Overrideable in those methods’ calls
@@ -38,79 +45,69 @@ class Program(object):
                'Last Registration Date',
                'TAP', 'APTS', 'VVTA']
 
-  # The (public) programs dict is indexed by program_code. There is only one instance of this class
-  # per program code.
+  # The (public) programs dict is a class variable, indexed by program_code.
   programs = {}
 
-  def __new__(self, program_code):
+  def __new__(self, program_code, unit_code=None):
     """ Return unique object for this program_code; create it first if necessary.
     """
+    assert program_code.isdecimal(), f'Invalid program code: “{program_code}”'
     if program_code not in Program.programs.keys():
       Program.programs[program_code] = super().__new__(self)
-      Program.programs[program_code].instances = {}
+      Program.programs[program_code].program_code = program_code
+      Program.programs[program_code].unit_code = unit_code
+      Program.programs[program_code].variants = {}
     return Program.programs[program_code]
 
-  def __init__(self, program_code):
-    self.program_code = program_code
-    self.unit_code = 'Unknown'
+  def __init__(self, program_code, unit_code='Unknown'):
+    assert self.program_code == program_code, f'“{self.program_code}” != “{program_code}”'
+    if self.unit_code is None:
+      self.unit_code = unit_code
 
   @property
-  def instance(self, instance_tuple):
-    return self.instances[instance_tuple]
+  def variant(self, variant_tuple):
+    return self.variants[variant_tuple]
 
-  def new_instance(self, instance_tuple, **kwargs):
-    if instance_tuple not in self.instances.keys():
-      award, hegis = instance_tuple
-      self.instances[instance_tuple] = _instance_info._make([None] * len(_items))
-      self.instances[instance_tuple].award = award
-      self.instances[instance_tuple].hegis = hegis
+  def new_variant(self, award, hegis, **kwargs):
+    assert re.match(r'\d{4}\.\d{2}', hegis), f'Invalid hegis code: “{hegis}”'
+    variant_tuple = (award, hegis)
+    if variant_tuple not in self.variants.keys():
+      self.variants[variant_tuple] = _variant_info._make([None] * len(_items))
+      self.variants[variant_tuple].award = award
+      self.variants[variant_tuple].hegis = hegis
     for key in kwargs:
-      self.instances[instance_tuple][key] = kwargs[key]
+      self.variants[variant_tuple][key] = kwargs[key]
+    return variant_tuple
 
   @property
   def awards(self):
-    return ' '.join(sorted([award for award, hegis in self.instances.keys()]))
+    return ' '.join(sorted([award for award, hegis in self.variants.keys()]))
 
   @classmethod
-  def html(this, institution, highlight_other=True):
+  def html_table(this, highlight_variants=True):
     table = '<table>'
     table += '<tr><th>Program Code</th><th>Registered By</th>'
     table += ''.join([f'<th>{head}</th>' for head in this._headings]) + '</tr>\n'
     for p in this.programs:
       program = this.programs[p]
-      instances = program.instances.keys()
-      for instance in instances:
-        print(f'Instance in html: {instance}')
-        which_class = ''
-        if highlight_other and (program.instances[instance].institution.upper()
-                                != institution.upper()):
-          which_class = ' class="other"'
+      which_class = ''
+      variants = program.variants.keys()
+      if len(variants) > 1 and highlight_variants:
+        which_class = ' class="variant"'
+      for variant in variants:
         table += f'<tr{which_class}><th>{program.program_code}</th><td>{program.unit_code}</td>'
-        table += ''.join([f'<td>{cell}</td>' for cell in program.values(instance)]) + '</tr>\n'
+        table += ''.join([f'<td>{cell}</td>' for cell in program.values(variant)]) + '</tr>\n'
     table += '</table>'
-    return f"""
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>{institution} Registered Progams</title>
-        <link rel="stylesheet" href="./registered_program.css"/>
-      </head>
-      <body>
-        <h1>{institution} Registered Programs</h1>
-        {table}
-      </body>
-    </html>
-    """
+    return table
 
-  def values(self, instance_tuple, headings=None):
+  def values(self, variant_tuple, headings=None):
     """ Given a list of column headings, yield the corresponding values for each award/hegis combo.
         Does not include program-wide values (program code and registration office’s unit code).
     """
-    print(f'instance_tuple in values: {instance_tuple}')
     if headings is None:
       headings = self._headings
     fields = [h.lower().replace(' or ', '_').replace(' ', '_') for h in headings]
-    return [self.instances[instance_tuple][field] for field in fields]
+    return [self.variants[variant_tuple][field] for field in fields]
 
   def __str__(self):
     return (self.__repr__().replace('program.Program object', 'NYS Registered Program')
