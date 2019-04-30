@@ -23,14 +23,13 @@ class Program(object):
       entries.
 
       A single program can have multiple variants, which differ in title, institution, award, and/or
-      hegis. Emprically, no two variants share both the same award and hegis combination, so that
-      pair is used as the key for a dictionary of per-variant values. All variants of a programs
-      share a single program code and unit code.
+      hegis. Emprically, no two variants share the same {award, hegis, and institution} combination,
+      so that tuple is used as the key for a dictionary of per-variant values. All variants of a
+      programs share a single program code and unit code.
 
-      Variant info is maintained as a recordclass so the instance values can be updated as new
-      records are retrieved from nys. [A recordclass is like a namedtuple, but the values are
-      mutable. Problem is, recordclass is still in beta ... but seems to be under active
-      development.]
+      Variant details are maintained as a recordclass so the values can be updated as new records
+      are retrieved from nys. [A recordclass is like a namedtuple, but the values are mutable.
+      Problem is, recordclass is still in beta ... but seems to be under active development.]
   """
 
   # Default heading strings for the html and values functions. Overrideable in those methods’ calls
@@ -68,9 +67,9 @@ class Program(object):
   def variant(self, variant_tuple):
     return self.variants[variant_tuple]
 
-  def new_variant(self, award, hegis, **kwargs):
+  def new_variant(self, award, hegis, institution, **kwargs):
     assert re.match(r'\d{4}\.\d{2}', hegis), f'Invalid hegis code: “{hegis}”'
-    variant_tuple = (award, hegis)
+    variant_tuple = (award, hegis, institution)
     if variant_tuple not in self.variants.keys():
       self.variants[variant_tuple] = _variant_info._make([None] * len(_items))
       self.variants[variant_tuple].award = award
@@ -81,7 +80,11 @@ class Program(object):
 
   @property
   def awards(self):
-    return ' '.join(sorted([award for award, hegis in self.variants.keys()]))
+    """ Return an array of awards for a program’s variants.
+        Used for testing if a for-award group applies to this program.
+        (Also used in __str__(), below.)
+    """
+    return sorted([award for award, hegis, institution in self.variants.keys()])
 
   @classmethod
   def html_table(this, highlight_variants=True):
@@ -111,5 +114,5 @@ class Program(object):
 
   def __str__(self):
     return (self.__repr__().replace('program.Program object', 'NYS Registered Program')
-            + f' {self.program_code} {self.unit_code} {self.awards}')
+            + f' {self.program_code} {self.unit_code} {", ".join(self.awards)}')
 

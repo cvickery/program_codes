@@ -100,7 +100,18 @@ def lookup_programs(institution, verbose=False, debug=False):
     matches = re.search(r'HEGIS : (\S+)', h4)
     if matches:
       this_hegis = matches.group(1)
-      p.new_variant(this_award, this_hegis, title=this_title)
+
+      # The institution should match the one that was requested.
+      this_institution = None
+      for inst in known_institutions.keys():
+        if known_institutions[inst][1] in h4:
+          this_institution = inst
+          break
+      if this_institution is None:
+        sys.exit(f'Unknown institution in {h4}')
+      assert this_institution == institution, f'h4 institution is {this_institution}\n{h4}'
+
+      p.new_variant(this_award, this_hegis, this_institution, title=this_title)
       continue
 
     if 'UNIT CODE' in h4:
@@ -121,8 +132,17 @@ def lookup_programs(institution, verbose=False, debug=False):
       print(program.program_code, program.unit_code)
       for v in program.variants:
         print(v, program.values(v))
+    exit()
 
   # Phase II: Get the details for each program found in Phase I
+  # Structure:
+  # * A program line followed by optional multi-award, and multi-institution lines. These
+  #   lines determine the program variants for a program.
+  # * A for-award line followed by detail liness for that award. There will be one or more for-award
+  #   groups. The details get applied to all variants that include the specified award.
+  # The following code tests lines in the sequence in which they appear on the details web page.
+  # This is for human-consumption: the tests for line types could be done in any order and the
+  # actual sequence of lines on the details page will make it all work out.
   programs_counter = 0
   for p in Program.programs:
     program = Program.programs[p]
@@ -138,7 +158,7 @@ def lookup_programs(institution, verbose=False, debug=False):
       tokens = line.split()
       token = tokens[0]
 
-      # First token is a numeric string (Program Code #.).
+      # First token is a numeric string (Program Code #.) or Multi-Award.
       if token.isdecimal() or token == 'M/A':
         # Extract program_code, title, hegis_code, award, institution.
         matches = re.match(r'\s*\d+|M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
@@ -152,19 +172,20 @@ def lookup_programs(institution, verbose=False, debug=False):
         if debug:
           print(f'{program.program_code}: "{program_title}" {program_hegis}'
                 f' {program_award} "{program_institution}"')
-        # Be sure this variant exists
-        this_variant = program.new_variant(program_award, program_hegis, title=program_title)
 
-        if program_institution == institution_name:
-          program.variants[this_variant].institution = institution.upper()
-        else:
-          for key in known_institutions.keys():
-            if program_institution == known_institutions[key][1]:
-              program.variants[this_variant].institution = key.upper()
-              break
+        # Create this variant if necessary
+        this_variant = program.new_variant(program_award, program_hegis, program_institution,
+                                           title=program_title)
+
+        for key in known_institutions.keys():
+          if program_institution == known_institutions[key][1]:
+            program.variants[this_variant].institution = key.upper()
+            break
         assert program.variants[this_variant].institution is not None
+
         continue
 
+      # M/A lines are handled in the previous section now.
       # if token == 'M/A':
       #   # line_type.multiple_awards
       #   # Extract title, hegis, award, and institution
@@ -190,46 +211,45 @@ def lookup_programs(institution, verbose=False, debug=False):
       #   assert program.variants[this_variant].institution is not None
       #   continue
 
-      """
-      It's a mess. Program variants are identified by award, hegis, AND institution. The M/I
-      lines, when the award is not NOT-GRANTING tell you when you need a new variant. Then the FOR
-      AWARD lines have to apply to all variants that share that award (even if they have different
-      hegis’s, I think.)
-      """
-
       if token == 'M/I':
-        # # Multi-institution lines add no new information about a program because multi-award lines
-        # # already tell what the institution(s) are.
-        # # But parsing code remains ... “just in case”
-        # # Extract hegis, award, institution
-        # #   But there is no hegis if the award is NOT-GRANTING
-        # if 'NOT-GRANTING' in line:
-        #   program_hegis = None
-        #   program_award = None
-        #   program_institution = line.split('NOT-GRANTING ')[1].strip()
-        # else:
-        #   matches = re.search(r'(\d{4}.\d{2})\s+(\S+\s?\S*)\s+(.*)', line)
-        #   if matches is None:
-        #     sys.exit(f'\nUnable to parse M/I line for program code {program.program_code}:{line}')
-        #   program_hegis = matches.group(1)
-        #   program_award = matches.group(2)
-        #   program_institution = matches.group(3).strip()
-        # if debug:
-        #   print('M/I:', program_hegis, program_award, program_institution)
+        # Extract hegis, award, institution
+        #   But there is no hegis if the award is NOT-GRANTING
+        if 'NOT-GRANTING' in line:
+          pass
+        else:
+          matches = re.search(r'(\d{4}.\d{2})\s+(\S+\s?\S*)\s+(.*)', line)
+          if matches is None:
+            sys.exit(f'\nUnable to parse M/I line for program code {program.program_code}:{line}')
+          program_hegis = matches.group(1)
+          program_award = matches.group(2)
+          program_institution_name = matches.group(3).strip()
+          program_institution = None
+          for inst in known_institutions:
+            if program_institution_name == known_institutions[inst][1]:
+              program_institution = inst
+              break
+          assert program_institution is not None, 'Unrecognized institution {} in {}'.format(
+              program_institution_name, line)
+
+          # Create this variant if necessary
+          program.new_variant(program_award, program_hegis, program_instituion)
         continue
 
       if token == 'FOR':
-        # Extract award. The following lines will not be of interest unless the award is in the list
-        # for this institution.
+        # Extract award, and use it to select variant_tuples that will be affected by detail lines
+        # that follow.
         for_award = re.match(r'\s*FOR AWARD\s*--(.*)', line).group(1).strip()
-        assert for_award in program.awards, f'{for_award} not in {program.awards}'
+        variant_tuples = [variant_tuple for variant_tuple in program.variants
+                          if variant_tuple[0] == for_award]
 
+      # Detail lines for the currently-identified award.
       if token.startswith('CERTIFICATE') and for_award is not None:
         # Extract certificate tuple {name, type, date} if there is one.
         cert_info = re.sub(r'\s+', ' ', line.split(':')[1].strip())
         if cert_info.startswith('NONE'):
           cert_info = ''
-        program.awards[for_award].certificate_license = cert_info
+        for variant_tuple in variant_tuples:
+          program.variants[variant_tuple].certificate_license = cert_info
         continue
 
       if token == 'PROGRAM' and tokens[1] == 'FINANCIAL' and for_award is not None:
@@ -238,14 +258,18 @@ def lookup_programs(institution, verbose=False, debug=False):
         if matches is None:
           sys.exit('\nUnable to parse eligibility line for program code {}:\n{line}'
                    .format(program.program_code))
-        program.awards[for_award].tap = matches.group(1)
-        program.awards[for_award].apts = matches.group(2)
-        program.awards[for_award].vvta = matches.group(3)
+        for variant_tuple in variant_tuples:
+          program.variants[variant_tuple].tap = matches.group(1)
+          program.variants[variant_tuple].apts = matches.group(2)
+          program.variants[variant_tuple].vvta = matches.group(3)
         continue
 
       if token == 'PROGRAM' and tokens[1] == 'PROFESSIONAL' and for_award is not None:
         # Extract text, if any.
-        program.accreditation = line.split(':')[1].strip()
+        program_accreditation = line.split(':')[1].strip()
+        for variant_tuple in variant_tuples:
+          program.variants[variant_tuple].accreditation = program_accreditation
+        continue
 
       if token == 'PROGRAM' and tokens[1] == 'FIRST' and for_award is not None:
         matches = re.search(r'DATE:\s+(\S+).+DATE:\s+(\S+)', line)
@@ -254,13 +278,15 @@ def lookup_programs(institution, verbose=False, debug=False):
                    .format(program.program_code, line))
         first_date = matches[1]
         last_date = matches[2]
-        if (program.awards[for_award].first_registration_date is None
-                or first_date.replace('PRE-', '19')
-                < program.awards[for_award].first_registration_date):
-          program.awards[for_award].first_registration_date = first_date
-        if (program.awards[for_award].last_registration_date is None
-                or last_date > program.awards[for_award].last_registration_date):
-          program.awards[for_award].last_registration_date = last_date
+        for variant_tuple in variant_tuples:
+          if (program.variants[variant_tuple].first_registration_date is None
+                  or first_date.replace('PRE-', '19')
+                  < program.variants[variant_tuple].first_registration_date):
+            program.awards.variants[variant_tuple].first_registration_date = first_date
+          if (program.variants[variant_tuple].last_registration_date is None
+                  or last_date > program.variants[variant_tuple].last_registration_date):
+            program.variants[variant_tuple].last_registration_date = last_date
+
   if verbose:
     print()
   return Program.programs
