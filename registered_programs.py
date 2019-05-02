@@ -339,7 +339,13 @@ if __name__ == '__main__':
   if not args.debug and not args.csv and not args.html and not args.update_db:
     sys.exit('No output options: nothing to do.')
 
-  institution = args.institution.lower().strip('10')
+  # Institution ID is a six-digit numeric string or, for CUNY, three letters followed by an optional
+  # 01.
+  if len(args.institution) < 6:
+    institution = args.institution.lower().strip('10')
+  else:
+    institution = args.institution
+
   programs = lookup_programs(institution, debug=args.debug, verbose=args.verbose)
   if programs is not None:
 
