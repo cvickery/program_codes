@@ -324,9 +324,7 @@ def lookup_programs(institution, verbose=False, debug=False):
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='''
                                    Scrape the NYS Department of Education website for information
-                                   about academic programs registered for CUNY colleges.''',
-                                   epilog='''
-                                   NOTE: Database option not implemented yet.''')
+                                   about academic programs registered for CUNY colleges.''')
   parser.add_argument('institution')
   parser.add_argument('-u', '--update_db', action='store_true', default=False,
                       help='update info for this institution in the registered_programs database')
