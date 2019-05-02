@@ -3,11 +3,13 @@
   Scrapes the NYS DOE website for registered academic programs at CUNY colleges.
 
       This is a two-phase process:
+
       I. Make a POST request to http://www.nysed.gov/coms/rp090/IRPS2A to get a web page listing
       all programs for a college, and extract the numeric program codes and Unit Codes.
-      II. Make a GET request to http://www.nysed.gov/COMS/RP090/IRPSL3 for each of the program
-      codes retrieved from Phase I, and analyze each page returned to extract the information needed
-      to generate the desired for output, which may be a .csv file, a HTML table, or a database
+
+      II. Make a GET request to http://www.nysed.gov/COMS/RP090/IRPSL3 for each of the program codes
+      retrieved from Phase I, and analyze each page returned to extract details about the program
+      needed to generate the desired output, which may be a .csv file, a HTML table, or a database
       table.
 
 April 2019:
@@ -16,6 +18,22 @@ April 2019:
       program.”
         OP:   Office of the Professions
         OCUE: Office of College and University Evaluation
+
+      Refactoring the previous version of this application to accommodate this new piece of
+      data led to a better understanding of how NYS structures the information about academic
+      programs. In particular, this version centers on the notion of program “variants,” which have
+      a common program code number, but differ in what award(s) are offered by what institution(s)
+      and under what HEGIS codes.
+
+Design Notes
+
+    The web code scraped from the NYSED website are not well-formed HTML documents. Phase I
+    documents can reliably be parsed into H4 elements, but Phase II documents are formatted as PRE
+    elements inside un-closed H4’s. That information is processed as lines of text, relying on the
+    internal formatting of the PRE blocks.
+
+    Program codes and HEGIS codes look like integers and floats respectively, but are kept as
+    strings because that is how they arrive and that is how they are always used/displayed.
 
 """
 import sys
@@ -77,14 +95,13 @@ def lookup_programs(institution, verbose=False, debug=False):
   r = requests.post('http://www.nysed.gov/coms/rp090/IRPS2A', data={'SEARCHES': '1',
                                                                     'instid': f'{institution_id}'})
   html_document = document_fromstring(r.content)
-  # the program codes and unit codes are inside H4 elements, in the following sequence:
+  # The program codes and unit codes are inside H4 elements, in the following sequence:
   #   PROGRAM CODE  : 36256 - ...
   #   PROGRAM TITLE : [title text] AWARD : [award text]
   #   INST.NAME/CITY .[name and address, ignored].. HEGIS : [hegis string for this award]
   #   FORMAT ... (Not always present; ignored.)
   #   UNIT CODE     : OCUE|OP
   h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
-  # [Waiting for assignment expressions in python 3.8 (PEP 572)]
   this_award = None
   for h4 in h4s:
     if debug:
@@ -140,10 +157,12 @@ def lookup_programs(institution, verbose=False, debug=False):
   #   lines determine the program variants for a program.
   # * A for-award line followed by detail liness for that award. There will be one or more for-award
   #   groups. The details get applied to all variants that include the specified award.
+  #
   # The following code tests lines in the sequence in which they appear on the details web page.
-  # This is for human-consumption: the tests for line types could be done in any order and the
-  # actual sequence of lines on the details page will make it all work out.
-  programs_counter = 0
+  # This is to reduce cognitive load: the tests for line types could be done in any order and the
+  # actual sequence of lines on the details page would make it all work out.
+
+  programs_counter = 0  # For progress reporting in verbose mode
   for p in Program.programs:
     program = Program.programs[p]
     programs_counter += 1
@@ -166,10 +185,11 @@ def lookup_programs(institution, verbose=False, debug=False):
         matches = re.match(r'\s*(\d+|M/A)\s+(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
         if matches is None:
           # This is ugly, but there is a stray 0x1E byte in the program line for program code 31441.
-          # This should lead to sys.exit (program error), but, rather, ignore the line and continue.
+          # This should lead to sys.exit (program error), but, rather, we ignore the line and
+          # continue.
           continue
           sys.exit(f'\nUnable to parse program code line for program code {program_code}:\n{line}')
-        # if Check the title and hegis for the award. Always set the institution.
+        # Check the title and hegis for the award. Always set the institution.
         program_title = fix_title(matches.group(2))
         program_hegis = matches.group(3)
         program_award = matches.group(4).strip()
@@ -194,7 +214,7 @@ def lookup_programs(institution, verbose=False, debug=False):
       if token == 'M/I':
         # Extract hegis, award, institution
         if 'NOT-GRANTING' in line:
-          # But the award is NOT-GRANTING, then variants for this award-institution pair have to be
+          # If the award is NOT-GRANTING, then variants for this award-institution pair have to be
           # removed.
           matches = re.search(r'NOT-GRANTING\s+(.+)', line)
           if matches is None:
@@ -299,7 +319,7 @@ def lookup_programs(institution, verbose=False, debug=False):
   return Program.programs
 
 
-""" Provision for running script from the command line.
+""" Command Line Interface
 """
 if __name__ == '__main__':
   parser = argparse.ArgumentParser(description='''
@@ -327,7 +347,8 @@ if __name__ == '__main__':
 
     if args.csv:
       # Generate spreadsheet
-      #
+      #   Apple Numbers does a better job than Microsoft Excel at opening the CSV file.
+      #   For Excel, it’s better to import it.
       file_name = institution.upper() + '_' + date.today().isoformat() + '.csv'
       with open(file_name, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
@@ -339,9 +360,11 @@ if __name__ == '__main__':
                             + program.values(award, hegis))
 
     if args.html:
+      # Generate a HTML table element. Add CSS to highlight rows that have the “variant” class.
       print(Program.html_table())
 
     if args.update_db:
+      # See registered_programs.sql for the schema of the table that is assumed to exist already.
       db = psycopg2.connect('dbname=cuny_courses')
       cursor = db.cursor(cursor_factory=NamedTupleCursor)
       cursor.execute('delete from registered_programs where target_institution=%s',
