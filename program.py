@@ -74,6 +74,7 @@ class Program(object):
       self.variants[variant_tuple] = _variant_info._make([None] * len(_items))
       self.variants[variant_tuple].award = award
       self.variants[variant_tuple].hegis = hegis
+      self.variants[variant_tuple].institution = institution.upper()
     for key in kwargs:
       self.variants[variant_tuple][key] = kwargs[key]
     return variant_tuple
@@ -87,19 +88,21 @@ class Program(object):
     return sorted([award for award, hegis, institution in self.variants.keys()])
 
   @classmethod
-  def html_table(this, highlight_variants=True):
+  def html_table(this):
     table = '<table>'
-    table += '<tr><th>Program Code</th><th>Registered By</th>'
+    table += '  <tr><th>Program Code</th><th>Registered By</th>'
     table += ''.join([f'<th>{head}</th>' for head in this._headings]) + '</tr>\n'
     for p in this.programs:
       program = this.programs[p]
       which_class = ''
       variants = program.variants.keys()
-      if len(variants) > 1 and highlight_variants:
-        which_class = ' class="variant"'
-      for variant in variants:
-        table += f'<tr{which_class}><th>{program.program_code}</th><td>{program.unit_code}</td>'
-        table += ''.join([f'<td>{cell}</td>' for cell in program.values(variant)]) + '</tr>\n'
+      if len(variants) > 1:
+        which_class = 'variant'
+      for variant_tuple in variants:
+        this_class = (which_class + f' {variant_tuple}').strip()
+        table += f"""  <tr class="{this_class}">
+        <th>{program.program_code}</th><td>{program.unit_code}</td>"""
+        table += ''.join([f'<td>{cell}</td>' for cell in program.values(variant_tuple)]) + '</tr>\n'
     table += '</table>'
     return table
 

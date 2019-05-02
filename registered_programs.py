@@ -87,12 +87,13 @@ def lookup_programs(institution, verbose=False, debug=False):
   # [Waiting for assignment expressions in python 3.8 (PEP 572)]
   this_award = None
   for h4 in h4s:
-
+    if debug:
+      print(h4)
     matches = re.search(r'PROGRAM CODE\s+:\s+(\d+) -.+PROGRAM TITLE\s+:\s+(.+)AWARD : (\S+\s?\S*)',
                         h4)
     if matches:
       program_code = matches.group(1)
-      p = Program(program_code)
+      program = Program(program_code)
       this_title = fix_title(matches.group(2))
       this_award = matches.group(3).strip()
       continue
@@ -109,15 +110,15 @@ def lookup_programs(institution, verbose=False, debug=False):
           break
       if this_institution is None:
         sys.exit(f'Unknown institution in {h4}')
-      assert this_institution == institution, f'h4 institution is {this_institution}\n{h4}'
+      assert this_institution == institution, f'h4 wrong institution: {this_institution}\n{h4}'
 
-      p.new_variant(this_award, this_hegis, this_institution, title=this_title)
+      program.new_variant(this_award, this_hegis, this_institution, title=this_title)
       continue
 
     if 'UNIT CODE' in h4:
       matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
       assert matches is not None, f'\nUnrecognized unit code line: {h4}'
-      p.unit_code = matches.group(1).strip()
+      program.unit_code = matches.group(1).strip()
       continue
 
   if verbose:
@@ -132,7 +133,6 @@ def lookup_programs(institution, verbose=False, debug=False):
       print(program.program_code, program.unit_code)
       for v in program.variants:
         print(v, program.values(v))
-    exit()
 
   # Phase II: Get the details for each program found in Phase I
   # Structure:
@@ -154,74 +154,65 @@ def lookup_programs(institution, verbose=False, debug=False):
     for_award = None
     r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
     for line in detail_lines(r.text):
+      if debug:
+        print(line)
       # Use the first token on a line to determine the type of line.
       tokens = line.split()
       token = tokens[0]
 
-      # First token is a numeric string (Program Code #.) or Multi-Award.
+      # First token is a numeric string (Program Code #.) or Multi-Award (M/A).
       if token.isdecimal() or token == 'M/A':
         # Extract program_code, title, hegis_code, award, institution.
-        matches = re.match(r'\s*\d+|M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
+        matches = re.match(r'\s*(\d+|M/A)\s+(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
         if matches is None:
+          # This is ugly, but there is a stray 0x1E byte in the program line for program code 31441.
+          # This should lead to sys.exit (program error), but, rather, ignore the line and continue.
+          continue
           sys.exit(f'\nUnable to parse program code line for program code {program_code}:\n{line}')
         # if Check the title and hegis for the award. Always set the institution.
-        program_title = fix_title(matches.group(1))
-        program_hegis = matches.group(2)
-        program_award = matches.group(3).strip()
-        program_institution = matches.group(4)
+        program_title = fix_title(matches.group(2))
+        program_hegis = matches.group(3)
+        program_award = matches.group(4).strip()
+        program_institution = matches.group(5)
+
         if debug:
-          print(f'{program.program_code}: "{program_title}" {program_hegis}'
+          print(f'Program # or M/A line: {program.program_code}: "{program_title}" {program_hegis}'
                 f' {program_award} "{program_institution}"')
 
-        # Create this variant if necessary
-        this_variant = program.new_variant(program_award, program_hegis, program_institution,
-                                           title=program_title)
-
+        this_institution = None
         for key in known_institutions.keys():
           if program_institution == known_institutions[key][1]:
-            program.variants[this_variant].institution = key.upper()
+            this_institution = key
             break
-        assert program.variants[this_variant].institution is not None
+        assert this_institution is not None, f'\n{this_institution}\n{line}'
 
+        # Create this variant if necessary
+        this_variant = program.new_variant(program_award, program_hegis, this_institution,
+                                           title=program_title)
         continue
-
-      # M/A lines are handled in the previous section now.
-      # if token == 'M/A':
-      #   # line_type.multiple_awards
-      #   # Extract title, hegis, award, and institution
-      #   matches = re.match(r'\s*M/A(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
-      #   if matches is None:
-      #     sys.exit(f'\nUnable to parse M/A line for program code {program_code}:\n{line}')
-      #   program_title = fix_title(matches.group(1))
-      #   program_hegis = matches.group(2)
-      #   program_award = matches.group(3).strip()
-      #   program_institution = matches.group(4)
-      #   if debug:
-      #     print(f'{program.program_code}: "{program_title}" {program_hegis}'
-      #           f' {program_award} "{program_institution}"')
-      #   # Be sure this variant exists
-      #   this_variant = program.new_variant(program_award, program_hegis, title=program_title)
-      #   if program_institution == institution_name:
-      #     program.variants[this_variant].institution = institution.upper()
-      #   else:
-      #     for key in known_institutions.keys():
-      #       if program_institution == known_institutions[key][1]:
-      #         program.variants[this_variant].institution = key.upper()
-      #         break
-      #   assert program.variants[this_variant].institution is not None
-      #   continue
 
       if token == 'M/I':
         # Extract hegis, award, institution
-        #   But there is no hegis if the award is NOT-GRANTING
         if 'NOT-GRANTING' in line:
-          pass
+          # But the award is NOT-GRANTING, then variants for this award-institution pair have to be
+          # removed.
+          matches = re.search(r'NOT-GRANTING\s+(.+)', line)
+          if matches is None:
+            sys.exit(f'\nUnable to parse M/I line for program code {program.program_code}:{line}')
+          this_institution = matches.group(1).strip()
+          for inst in known_institutions:
+            if this_institution == known_institutions[inst][1]:
+              for variant_tuple in list(program.variants.keys()):
+                if variant_tuple[0] == program_award and variant_tuple[2] == inst:
+                  program.variants.pop(variant_tuple, None)
+                  if debug:
+                    print(f'Deleted tuple {variant_tuple}')
         else:
           matches = re.search(r'(\d{4}.\d{2})\s+(\S+\s?\S*)\s+(.*)', line)
           if matches is None:
             sys.exit(f'\nUnable to parse M/I line for program code {program.program_code}:{line}')
           program_hegis = matches.group(1)
-          program_award = matches.group(2)
+          program_award = matches.group(2).strip()
           program_institution_name = matches.group(3).strip()
           program_institution = None
           for inst in known_institutions:
@@ -232,7 +223,9 @@ def lookup_programs(institution, verbose=False, debug=False):
               program_institution_name, line)
 
           # Create this variant if necessary
-          program.new_variant(program_award, program_hegis, program_instituion)
+          variant = program.new_variant(program_award, program_hegis, program_institution)
+          if debug:
+            print(variant)
         continue
 
       if token == 'FOR':
@@ -241,6 +234,9 @@ def lookup_programs(institution, verbose=False, debug=False):
         for_award = re.match(r'\s*FOR AWARD\s*--(.*)', line).group(1).strip()
         variant_tuples = [variant_tuple for variant_tuple in program.variants
                           if variant_tuple[0] == for_award]
+        if debug:
+          for variant in variant_tuples:
+            print(variant)
 
       # Detail lines for the currently-identified award.
       if token.startswith('CERTIFICATE') and for_award is not None:
@@ -249,6 +245,8 @@ def lookup_programs(institution, verbose=False, debug=False):
         if cert_info.startswith('NONE'):
           cert_info = ''
         for variant_tuple in variant_tuples:
+          if debug:
+            print(f'Update {variant_tuple} with cert info “{cert_info}”')
           program.variants[variant_tuple].certificate_license = cert_info
         continue
 
@@ -259,6 +257,11 @@ def lookup_programs(institution, verbose=False, debug=False):
           sys.exit('\nUnable to parse eligibility line for program code {}:\n{line}'
                    .format(program.program_code))
         for variant_tuple in variant_tuples:
+          if debug:
+            print('Update {} with: {} {} {}'.format(variant_tuple,
+                                                    matches.group(1),
+                                                    matches.group(2),
+                                                    matches.group(3)))
           program.variants[variant_tuple].tap = matches.group(1)
           program.variants[variant_tuple].apts = matches.group(2)
           program.variants[variant_tuple].vvta = matches.group(3)
@@ -268,6 +271,8 @@ def lookup_programs(institution, verbose=False, debug=False):
         # Extract text, if any.
         program_accreditation = line.split(':')[1].strip()
         for variant_tuple in variant_tuples:
+          if debug:
+            print(f'Update {variant_tuple} with accreditiation: “{program_accreditation}”')
           program.variants[variant_tuple].accreditation = program_accreditation
         continue
 
@@ -279,10 +284,12 @@ def lookup_programs(institution, verbose=False, debug=False):
         first_date = matches[1]
         last_date = matches[2]
         for variant_tuple in variant_tuples:
+          if debug:
+            print(f'Update {variant_tuple} with dates: {first_date} {last_date}')
           if (program.variants[variant_tuple].first_registration_date is None
                   or first_date.replace('PRE-', '19')
                   < program.variants[variant_tuple].first_registration_date):
-            program.awards.variants[variant_tuple].first_registration_date = first_date
+            program.variants[variant_tuple].first_registration_date = first_date
           if (program.variants[variant_tuple].last_registration_date is None
                   or last_date > program.variants[variant_tuple].last_registration_date):
             program.variants[variant_tuple].last_registration_date = last_date
@@ -317,6 +324,7 @@ if __name__ == '__main__':
   institution = args.institution.lower().strip('10')
   programs = lookup_programs(institution, debug=args.debug, verbose=args.verbose)
   if programs is not None:
+
     if args.csv:
       # Generate spreadsheet
       #
@@ -329,8 +337,10 @@ if __name__ == '__main__':
           for award, hegis in program.awards.keys():
             writer.writerow([program.program_code, program.unit_code]
                             + program.values(award, hegis))
+
     if args.html:
-      print(Program.html(institution.upper()))
+      print(Program.html_table())
+
     if args.update_db:
       db = psycopg2.connect('dbname=cuny_courses')
       cursor = db.cursor(cursor_factory=NamedTupleCursor)
@@ -340,12 +350,12 @@ if __name__ == '__main__':
             .format(cursor.rowcount, institution.upper(), len(Program.programs)))
       for p in Program.programs:
         program = programs[p]
-        for award, hegis in program.awards.keys():
-          values = [institution,
-                    program.program_code,
-                    program.unit_code] + program.values(award, hegis)
+        for program_variant in program.variants:
+          values = [institution, program.program_code, program.unit_code]
+          values += program.values(program_variant)
           cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
                          + ')', values)
+
       db.commit()
       db.close()
 
