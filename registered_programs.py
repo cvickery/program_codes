@@ -317,7 +317,7 @@ def lookup_programs(institution, verbose=False, debug=False):
             program.variants[variant_tuple].last_registration_date = last_date
 
   if verbose:
-    print()
+    print('\r')
   return Program.programs
 
 
@@ -358,12 +358,12 @@ if __name__ == '__main__':
       file_name = institution.upper() + '_' + date.today().isoformat() + '.csv'
       with open(file_name, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['Program Code', 'Registration Office'] + Program.headings)
+        writer.writerow(['Program Code', 'Registration Office'] + Program._headings)
         for p in Program.programs:
           program = programs[p]
-          for award, hegis in program.awards.keys():
+          for program_variant in program.variants:
             writer.writerow([program.program_code, program.unit_code]
-                            + program.values(award, hegis))
+                            + program.values(program_variant))
 
     if args.html:
       # Generate a HTML table element. Add CSS to highlight rows that have the “variant” class.
