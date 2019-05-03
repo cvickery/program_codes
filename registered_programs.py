@@ -76,10 +76,12 @@ def fix_title(str):
              .title()
              .replace('Cuny', 'CUNY')
              .replace('Mhc', 'MHC')
+             .replace('Suny', 'SUNY')
              .replace('\'S', '’s')
              .replace('1St', '1st')
              .replace('6Th', '6th')
-             .replace(' And ', ' and '))
+             .replace(' And ', ' and ')
+             .replace(' Of ', ' of '))
 
 
 def lookup_programs(institution, verbose=False, debug=False):
