@@ -368,8 +368,12 @@ if __name__ == '__main__':
       print(Program.html_table())
 
     if args.update_db:
+      if args.debug:
+        db_name = 'vickery'
+      else:
+        db_name = 'cuny_courses'
       # See registered_programs.sql for the schema of the table that is assumed to exist already.
-      db = psycopg2.connect('dbname=cuny_courses')
+      db = psycopg2.connect(f'dbname={db_name}')
       cursor = db.cursor(cursor_factory=NamedTupleCursor)
       cursor.execute('delete from registered_programs where target_institution=%s',
                      (institution,))
@@ -377,9 +381,11 @@ if __name__ == '__main__':
             .format(cursor.rowcount, institution.upper(), len(Program.programs)))
       for p in Program.programs:
         program = programs[p]
+        is_variant = len(program.variants) > 1
         for program_variant in program.variants:
           values = [institution, program.program_code, program.unit_code]
           values += program.values(program_variant)
+          values += [is_variant]
           cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
                          + ')', values)
 

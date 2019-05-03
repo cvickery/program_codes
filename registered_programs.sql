@@ -15,5 +15,6 @@ create table registered_programs (
   tap                     text default 'unknown',
   apts                    text default 'unknown',
   vvta                    text default 'unknown',
+  is_variant              boolean default False,
   primary key (target_institution, institution, program_code, award, hegis)
 )
