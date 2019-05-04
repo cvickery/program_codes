@@ -174,7 +174,13 @@ def lookup_programs(institution, verbose=False, debug=False):
 
     for_award = None
     r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
-    for line in detail_lines(r.text):
+
+    # There was a web page that had a 0x1e in the middle of a string of blanks (program code 31441
+    # at CSI), and splitlines() uses this as one of the line boundaries ((Record Separator)), which
+    # broke the first re.match operation below. There is no option for changing the behavior of the
+    # splitlines builtin, so we delete the stray character from all web pages retrieved. By rights,
+    # we should also be deleting \v, \f, \x1c, \x1d, \x85, \u2028, and \u2029 as well. But we don’t.
+    for line in detail_lines(r.text.replace('\x1e', '')):
       if debug:
         print(line)
       # Use the first token on a line to determine the type of line.
@@ -186,10 +192,6 @@ def lookup_programs(institution, verbose=False, debug=False):
         # Extract program_code, title, hegis_code, award, institution.
         matches = re.match(r'\s*(\d+|M/A)\s+(.+)(\d{4}\.\d{2})\s+(\S+\s?\S*)\s+(.+)', line)
         if matches is None:
-          # This is ugly, but there is a stray 0x1E byte in the program line for program code 31441.
-          # This should lead to sys.exit (program error), but, rather, we ignore the line and
-          # continue.
-          continue
           sys.exit(f'\nUnable to parse program code line for program code {program_code}:\n{line}')
         # Check the title and hegis for the award. Always set the institution.
         program_title = fix_title(matches.group(2))
