@@ -1,4 +1,8 @@
 #! /usr/local/bin/bash
+# Re-initialize and populate the registered_programs table.
+
+psql cuny_courses < registered_programs.sql
+
 for inst in bar bcc bkl bmc cty csi grd hos htr jjc kcc lag law leh mec \
 ncc nyt qcc qns sps yrk
 do
