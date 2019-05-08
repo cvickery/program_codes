@@ -3,6 +3,8 @@
 
 psql cuny_courses < registered_programs.sql
 
+psql cuny_courses -c "update updates set update_date = 'unknown' \
+                        where table_name = 'registred_programs'"
 rm csv_files/*
 
 for inst in bar bcc bkl bmc cty csi grd hos htr jjc kcc lag law leh mec \
@@ -13,4 +15,4 @@ do
 done
 
 psql cuny_courses -c "update updates set update_date = '`gdate -I`' \
-                     where table_name = 'registered_programs'"
+                        where table_name = 'registered_programs'"
