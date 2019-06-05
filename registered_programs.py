@@ -301,7 +301,7 @@ def lookup_programs(institution, verbose=False, debug=False):
         continue
 
       if token == 'PROGRAM' and tokens[1] == 'FIRST' and for_award is not None:
-        matches = re.search(r'DATE:\s+(\S+).+DATE:\s+(\S+)', line)
+        matches = re.search(r'DATE:\s+(\S+).+ACTION:\s+(\S+)', line)
         if matches is None:
           sys.exit('\nUnable to parse registration dates for program code {}:\n{}'
                    .format(program.program_code, line))
