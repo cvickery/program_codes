@@ -314,9 +314,9 @@ def lookup_programs(institution, verbose=False, debug=False):
                   or first_date.replace('PRE-', '19')
                   < program.variants[variant_tuple].first_registration_date):
             program.variants[variant_tuple].first_registration_date = first_date
-          if (program.variants[variant_tuple].last_registration_date is None
-                  or last_date > program.variants[variant_tuple].last_registration_date):
-            program.variants[variant_tuple].last_registration_date = last_date
+          if (program.variants[variant_tuple].last_registration_action is None
+                  or last_date > program.variants[variant_tuple].last_registration_action):
+            program.variants[variant_tuple].last_registration_action = last_date
 
   if verbose:
     print('\r')

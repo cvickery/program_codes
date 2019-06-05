@@ -8,7 +8,7 @@ _items = ['institution',
           'award',
           'hegis',
           'first_registration_date',
-          'last_registration_date',
+          'last_registration_action',
           'tap', 'apts', 'vvta',
           'certificate_license',
           'accreditation']
@@ -41,7 +41,7 @@ class Program(object):
                'Certificate or License',
                'Accreditation',
                'First Registration Date',
-               'Last Registration Date',
+               'Last Registration Action',
                'TAP', 'APTS', 'VVTA']
 
   # The (public) programs dict is a class variable, indexed by program_code.
@@ -118,4 +118,3 @@ class Program(object):
   def __str__(self):
     return (self.__repr__().replace('program.Program object', 'NYS Registered Program')
             + f' {self.program_code} {self.unit_code} {", ".join(self.awards)}')
-
