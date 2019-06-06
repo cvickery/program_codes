@@ -1,17 +1,31 @@
 #! /usr/local/bin/bash
-# Re-initialize and populate the registered_programs table.
+# Update the registered_programs table, which must already exist
 
-psql cuny_courses < registered_programs.sql
+# Check that the
+psql cuny_courses -c "select update_date from updates where table_name = 'registered_programs'"| \
+  ack '\d{4}-\d{2}-\d{2}'>/dev/null
+if [[ $? == 1 ]]
+then echo -n "(Re-)create the registered_programs table ... "
+     psql -X -q -d cuny_courses -f registered_programs.sql
+     if [[ $? == 0 ]]
+     then echo done.
+     else echo Failed!
+          exit 1
+     fi
+fi
 
-psql cuny_courses -c "update updates set update_date = 'unknown' \
-                        where table_name = 'registred_programs'"
-rm csv_files/*
+rm -f csv_files/*
 
 for inst in bar bcc bkl bmc cty csi grd hos htr jjc kcc lag law leh mec \
 ncc nyt qcc qns sps yrk
 do
   python3 registered_programs.py -cvu $inst
-  mv `echo $inst|tr a-z A-Z`*csv csv_files
+  if [[ $? == 0 ]]
+  then # replace any existing spreadsheet(s) for this institution
+       rm -f csv_files/`echo $inst|tr a-z A-Z`*csv
+       mv `echo $inst|tr a-z A-Z`*csv csv_files
+  else exit 1
+  fi
 done
 
 psql cuny_courses -c "update updates set update_date = '`gdate -I`' \

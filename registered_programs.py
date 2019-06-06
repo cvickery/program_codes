@@ -88,7 +88,14 @@ def lookup_programs(institution, verbose=False, debug=False):
   """ Scrape info about academic programs registered with NYS from the Department of Education
       website. Create a Program object for each program_code.
   """
-  institution_id, institution_name, is_cuny = known_institutions[institution]
+  try:
+    institution_id, institution_name, is_cuny = known_institutions[institution]
+  except KeyError:
+    # Unrecognized institution: assume it’s malicious.
+    if re.match(r'^\w+$', institution) is None:
+      sys.exit('Malformed institution name.')
+    else:
+      sys.exit(f'Unrecognized institution: {institution}.')
 
   # Phase I: Get the program code, title, award, hegis, and unit code for all programs
   # registered for the institution.
