@@ -6,7 +6,7 @@ create table updates
 drop table if exists requirement_blocks;
 create table requirement_blocks (
 institution text,
-requirement_id text primary key,
+requirement_id text,
 block_type text,
 block_value text,
 title text,
@@ -16,4 +16,5 @@ major1 text,
 major2 text,
 concentration text,
 minor text,
-requirement_text text);
+requirement_text text,
+primary key (institution, requirement_id));
