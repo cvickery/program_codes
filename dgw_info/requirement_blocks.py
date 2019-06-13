@@ -1,3 +1,5 @@
+#! /usr/local/bin/python3
+
 """ Update requirement block information.
 """
 
@@ -115,6 +117,9 @@ for query in queries.iterdir():
                 db_records.append(DB_Record._make([institution] + values))
 
         cursor.execute(f"delete from requirement_blocks where institution = '{institution}'")
+        if args.debug:
+          print('replacing {} requirement blocks with {} blocks for {}'
+                .format(cursor.rowcount, len(db_records), institution))
         for db_record in db_records:
           cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
         cursor.execute("""insert into updates values (%s, %s)
