@@ -47,7 +47,7 @@ class Program(object):
   # The (public) programs dict is a class variable, indexed by program_code.
   programs = {}
 
-  def __new__(self, program_code, unit_code=None):
+  def __new__(self, program_code, unit_code=None, formats=None):
     """ Return unique object for this program_code; create it first if necessary.
     """
     assert program_code.isdecimal(), f'Invalid program code: “{program_code}”'
@@ -55,13 +55,16 @@ class Program(object):
       Program.programs[program_code] = super().__new__(self)
       Program.programs[program_code].program_code = program_code
       Program.programs[program_code].unit_code = unit_code
+      Program.programs[program_code].formats = formats
       Program.programs[program_code].variants = {}
     return Program.programs[program_code]
 
-  def __init__(self, program_code, unit_code='Unknown'):
+  def __init__(self, program_code, unit_code='Unknown', formats='Unknown'):
     assert self.program_code == program_code, f'“{self.program_code}” != “{program_code}”'
     if self.unit_code is None:
       self.unit_code = unit_code
+    if self.formats is None:
+      self.formats = formats
 
   @property
   def variant(self, variant_tuple):
@@ -89,8 +92,13 @@ class Program(object):
 
   @classmethod
   def html_table(this):
-    table = '<table>'
+    """ This html table is primarily for testing during development.
+        The transfer app generates html tables from the database info.
+    """
+    table = '<style>.variant {background-color:#fcc;}</style><table>'
     table += '  <tr><th>Program Code</th><th>Registered By</th>'
+    table += """<th><a href="http://www.nysed.gov/college-university-evaluation/format-definitions">
+                Formats</a></th>"""
     table += ''.join([f'<th>{head}</th>' for head in this._headings]) + '</tr>\n'
     for p in this.programs:
       program = this.programs[p]
@@ -101,7 +109,7 @@ class Program(object):
       for variant_tuple in variants:
         this_class = (which_class + f' {variant_tuple}').strip()
         table += f"""  <tr class="{this_class}">
-        <th>{program.program_code}</th><td>{program.unit_code}</td>"""
+        <th>{program.program_code}</th><td>{program.unit_code}</td><td>{program.formats}</td>"""
         table += ''.join([f'<td>{cell}</td>' for cell in program.values(variant_tuple)]) + '</tr>\n'
     table += '</table>'
     return table

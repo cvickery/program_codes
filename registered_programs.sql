@@ -9,6 +9,7 @@ create table registered_programs (
   institution               text not null,
   title                     text default 'unnamed',
   award                     text not null,
+  formats                   text default 'unknown',
   hegis                     text default 'none',
   certificate_license       text default 'unknown',
   accreditation             text default 'unknown',

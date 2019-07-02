@@ -108,7 +108,7 @@ def lookup_programs(institution, verbose=False, debug=False):
   #   PROGRAM CODE  : 36256 - ...
   #   PROGRAM TITLE : [title text] AWARD : [award text]
   #   INST.NAME/CITY .[name and address, ignored].. HEGIS : [hegis string for this award]
-  #   FORMAT ... (Not always present; ignored.)
+  #   FORMATS ... (Not always present.)
   #   UNIT CODE     : OCUE|OP
   h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
   this_award = None
@@ -145,6 +145,13 @@ def lookup_programs(institution, verbose=False, debug=False):
       matches = re.match(r'\s*UNIT CODE\s*:\s*(.+)\s*', h4)
       assert matches is not None, f'\nUnrecognized unit code line: {h4}'
       program.unit_code = matches.group(1).strip()
+      continue
+
+    # The formats information, like the program and unit codes, applies to all variants
+    if 'FORMATS' in h4:
+      matches = re.match(r'\s*FORMATS\s*:\s*(.+)\s*', h4)
+      assert matches is not None, f'\nUnrecognized formats line: {h4}'
+      program.formats = matches.group(1).strip()
       continue
 
   if verbose:
@@ -367,11 +374,11 @@ if __name__ == '__main__':
       file_name = institution.upper() + '_' + date.today().isoformat() + '.csv'
       with open(file_name, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.writer(csvfile)
-        writer.writerow(['Program Code', 'Registration Office'] + Program._headings)
+        writer.writerow(['Program Code', 'Registration Office', 'Formats'] + Program._headings)
         for p in Program.programs:
           program = programs[p]
           for program_variant in program.variants:
-            writer.writerow([program.program_code, program.unit_code]
+            writer.writerow([program.program_code, program.unit_code, program.formats]
                             + program.values(program_variant))
 
     if args.html:
@@ -383,7 +390,7 @@ if __name__ == '__main__':
         db_name = 'vickery'
       else:
         db_name = 'cuny_courses'
-      # See registered_programs.sql for the schema of the table that is assumed to exist already.
+      # See registered_programs.sql for the schema of the table, which must already exist.
       db = psycopg2.connect(f'dbname={db_name}')
       cursor = db.cursor(cursor_factory=NamedTupleCursor)
       cursor.execute('delete from registered_programs where target_institution=%s',
@@ -397,6 +404,7 @@ if __name__ == '__main__':
           values = [institution, program.program_code, program.unit_code]
           values += program.values(program_variant)
           values += [is_variant]
+          values.insert(6, program.formats)
           cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
                          + ')', values)
 
