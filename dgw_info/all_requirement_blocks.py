@@ -4,10 +4,11 @@
 
     2019-07-26
     This version works with the CUNY-wide dap_req_block table maintained by OIRA, instead of the
-    separate tables used previously.
+    separate tables used in requirement_blocks.py.
 
     The last two columns of the csv are the college in QNS01 format and the date in DD-MMM-YY
     format. (DD-MMM-YY ... really?)
+    datetime.strptime('25-JUL-19', '%d-%b-%y').strftime('%Y-%m-%d') ==> 2019-07-25
 """
 
 import argparse
@@ -51,26 +52,6 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--debug', action='store_true', default=False)
 args = parser.parse_args()
 
-institution_mappings = {'bb': 'bar',
-                        'bc': 'bkl',
-                        'bm': 'bmc',
-                        'bx': 'bcc',
-                        'cc': 'cty',
-                        'hc': 'htr',
-                        'ho': 'hos',
-                        'jj': 'jjc',
-                        'kb': 'kcc',
-                        'lc': 'leh',
-                        'lg': 'lag',
-                        'lu': 'slu',
-                        'me': 'mec',
-                        'nc': 'ncc',
-                        'ny': 'nyt',
-                        'qb': 'qcc',
-                        'qc': 'qns',
-                        'si': 'csi',
-                        'sp': 'sps',
-                        'yc': 'yrk'}
 db_cols = ['institution',
            'requirement_id',
            'block_type',
@@ -92,13 +73,15 @@ db = psycopg2.connect('dbname=cuny_programs')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 
 # Get list of query files
-queries = Path('./queries')
-for query in queries.iterdir():
-  if query.name.endswith('.csv'):
-    with open(query, 'r') as query_file:
-      reader = csv.reader(query_file)
-      for line in reader:
-        print(line[-2:])
+cols = None
+with open('queries/ALL_DAP_REQ_BLOCK.csv', 'r') as query_file:
+  reader = csv.reader(query_file)
+  for line in reader:
+    if cols is None:
+      cols = [col.lower().replace(' ', '_') for col in line]
+      print(cols)
+      exit()
+    print(line[-2:])
 #           cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
 #         cursor.execute("""insert into updates values (%s, %s)
 #                               on conflict (institution)
