@@ -19,7 +19,7 @@ from psycopg2.extras import NamedTupleCursor
 from datetime import datetime, timezone
 from collections import namedtuple
 
-# Not in DegreeWorks
+# CUNY Institutions Not In DegreeWorks
 # GRD01 | The Graduate Center
 # LAW01 | CUNY School of Law
 # MED01 | CUNY School of Medicine
@@ -50,6 +50,7 @@ from collections import namedtuple
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--debug', action='store_true', default=False)
+parser.add_argument('-v', '--verbose', action='store_true', default=False)
 args = parser.parse_args()
 
 db_cols = ['institution',
@@ -72,22 +73,62 @@ DB_Record = namedtuple('DB_Record', db_cols)
 db = psycopg2.connect('dbname=cuny_programs')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 
-# Get list of query files
+# Make dict of CSV rows by institution, and be sure irdw_load_dates are all the same
+institutions = {}
+Institution = namedtuple('Institution', 'load_date rows')
 cols = None
 with open('queries/ALL_DAP_REQ_BLOCK.csv', 'r') as query_file:
   reader = csv.reader(query_file)
   for line in reader:
     if cols is None:
       cols = [col.lower().replace(' ', '_') for col in line]
-      print(cols)
-      exit()
-    print(line[-2:])
-#           cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
-#         cursor.execute("""insert into updates values (%s, %s)
-#                               on conflict (institution)
-#                               do update set last_update = %s
-#                        """, (institution, file_time, file_time))
-# db.commit()
+      Row = namedtuple('Row', cols)
+    else:
+      row = Row._make(line)
+      institution = row.institution.lower().strip('10')
+      load_date = datetime.strptime(row.irdw_load_date, '%d-%b-%y').strftime('%Y-%m-%d')
+      if institution not in institutions.keys():
+        institutions[institution] = Institution._make([load_date, []])
+      assert load_date == institutions[institution].load_date, \
+          f'{load_date} is not {institutions[institution].load_date} for {institution}'
+      institutions[institution].rows.append(row)
+  # Process the rows for each institution
+  for institution in institutions.keys():
+    load_date = institutions[institution].load_date
+    if args.verbose:
+      print(f'Found {len(institutions[institution].rows):8,}'
+            f' records dated {load_date} for {institution}')
+    cursor.execute("select * from updates where institution = %s", (institution, ))
+    institution_rowcount = cursor.rowcount
+    assert institution_rowcount < 2, f'Multiple rows for {institution} in updates table'
+    last_update = str(cursor.fetchone().last_update)
+    if institution_rowcount == 0 or last_update != load_date:
+      cursor.execute(f"delete from requirement_blocks where institution = '{institution}'")
+      if args.verbose:
+        suffix = 's'
+        if cursor.rowcount == 1:
+          suffix = ''
+        print(f'Replace {cursor.rowcount:6,} requirement block{suffix} '
+              f'dated {last_update} for {institution}')
+      cursor.execute("""insert into updates values (%s, %s)
+                            on conflict (institution)
+                            do update set last_update = %s
+                     """, (institution, load_date, load_date))
+      for row in institutions[institution].rows:
+        db_record = DB_Record._make([institution,
+                                     row.requirement_id,
+                                     row.block_type,
+                                     row.block_value,
+                                     row.title,
+                                     row.period_start,
+                                     row.period_stop,
+                                     row.major1,
+                                     row.major2,
+                                     row.concentration,
+                                     row.minor,
+                                     row.requirement_text])
+        cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
+db.commit()
 
 
 

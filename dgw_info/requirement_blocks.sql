@@ -1,7 +1,7 @@
 drop table if exists updates;
 create table updates
   (institution text primary key,
-  last_update timestamptz);
+  last_update date);
 
 drop table if exists requirement_blocks;
 create table requirement_blocks (
