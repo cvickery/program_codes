@@ -101,7 +101,10 @@ with open('queries/ALL_DAP_REQ_BLOCK.csv', 'r') as query_file:
     cursor.execute("select * from updates where institution = %s", (institution, ))
     institution_rowcount = cursor.rowcount
     assert institution_rowcount < 2, f'Multiple rows for {institution} in updates table'
-    last_update = str(cursor.fetchone().last_update)
+    if institution_rowcount == 1:
+      last_update = str(cursor.fetchone().last_update)
+    else:
+      last_update = ''
     if institution_rowcount == 0 or last_update != load_date:
       cursor.execute(f"delete from requirement_blocks where institution = '{institution}'")
       if args.verbose:
