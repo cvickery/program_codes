@@ -77,7 +77,7 @@ cursor = db.cursor(cursor_factory=NamedTupleCursor)
 institutions = {}
 Institution = namedtuple('Institution', 'load_date rows')
 cols = None
-with open('queries/ALL_DAP_REQ_BLOCK.csv', 'r') as query_file:
+with open('queries/DAP_REQ_BLOCK.csv', 'r') as query_file:
   reader = csv.reader(query_file)
   for line in reader:
     if cols is None:
