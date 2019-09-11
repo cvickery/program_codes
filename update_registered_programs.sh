@@ -1,4 +1,8 @@
 #! /usr/local/bin/bash
+
+# Get latest HEGIS code list from NYS and rebuild the hegis_area and hegis_codes tables.
+./hegis_codes.py
+
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
