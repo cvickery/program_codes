@@ -405,6 +405,10 @@ if __name__ == '__main__':
           values += program.values(program_variant)
           values += [is_variant]
           values.insert(6, program.formats)
+          # deal with nul bytes from NYS
+          for i in range(len(values)):
+            if type(values[i]) is str:
+              values[i] = values[i].replace('\x00', '')
           cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
                          + ')', values)
 
