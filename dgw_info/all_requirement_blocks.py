@@ -11,6 +11,7 @@
     datetime.strptime('25-JUL-19', '%d-%b-%y').strftime('%Y-%m-%d') ==> 2019-07-25
 """
 
+import os
 import argparse
 from pathlib import Path
 import csv
@@ -132,14 +133,8 @@ with open('queries/DAP_REQ_BLOCK.csv', 'r') as query_file:
                                      row.requirement_text])
         cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
 db.commit()
+db.close()
 
-
-
-
-
-
-
-
-
-
+# Archive the csv file
+os.rename('./queries/DAP_REQ_BLOCK.csv', f'./query_archive/DAP_REQ_BLOCK_{load_date}.csv')
 
