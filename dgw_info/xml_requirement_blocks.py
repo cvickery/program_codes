@@ -4,13 +4,11 @@
 
     2019-11-09
     This version modifies csv_requirement_blocks.py to work with xml instead of csv input
+
     2019-07-26
     This version works with the CUNY-wide dap_req_block table maintained by OIRA, instead of the
     separate tables used in requirement_blocks.py.
 
-    The last two columns of the csv are the college in QNS01 format and the date in DD-MMM-YY
-    format. (DD-MMM-YY ... really?)
-    datetime.strptime('25-JUL-19', '%d-%b-%y').strftime('%Y-%m-%d') ==> 2019-07-25
 """
 
 import sys
@@ -99,7 +97,7 @@ for record in tree.findall("ROW"):
     Row = namedtuple('Row', [col.attrib['NAME'].lower() for col in cols])
   row = Row._make(line)
   institution = row.institution.lower().strip('10')
-  load_date = row.irdw_load_date
+  load_date = row.irdw_load_date[0:10]
   if institution not in institutions.keys():
     institutions[institution] = Institution._make([load_date, []])
   assert load_date == institutions[institution].load_date, \
