@@ -13,7 +13,6 @@
     datetime.strptime('25-JUL-19', '%d-%b-%y').strftime('%Y-%m-%d') ==> 2019-07-25
 """
 
-import os
 import sys
 import argparse
 from pathlib import Path
@@ -83,11 +82,13 @@ institutions = {}
 Institution = namedtuple('Institution', 'load_date rows')
 
 file = Path(args.file)
+if not file.exists():
+  sys.exit(f'File not found: {file}')
 
 try:
-  tree = parse(args.file)
-except FileNotFoundError as fnfe:
-  sys.exit(fnfe)
+  tree = parse(file)
+except xml.etree.ElementTree.ParseError as pe:
+  sys.exit(pe)
 
 Row = None
 for record in tree.findall("ROW"):
@@ -114,39 +115,45 @@ for institution in institutions.keys():
   cursor.execute("select * from updates where institution = %s", (institution, ))
   institution_rowcount = cursor.rowcount
   assert institution_rowcount < 2, f'Multiple rows for {institution} in updates table'
-  if institution_rowcount == 1:
-    last_update = str(cursor.fetchone().last_update)
-  else:
-    last_update = ''
-  if institution_rowcount == 0 or last_update != load_date:
-    cursor.execute(f"delete from requirement_blocks where institution = '{institution}'")
-    if args.verbose:
-      suffix = 's'
-      if cursor.rowcount == 1:
-        suffix = ''
-      print(f'Replace {cursor.rowcount:6,} requirement block{suffix} '
-            f'dated {last_update} for {institution}')
-    cursor.execute("""insert into updates values (%s, %s)
-                          on conflict (institution)
-                          do update set last_update = %s
-                   """, (institution, load_date, load_date))
-    for row in institutions[institution].rows:
-      db_record = DB_Record._make([institution,
-                                   row.requirement_id,
-                                   row.block_type,
-                                   row.block_value,
-                                   row.title,
-                                   row.period_start,
-                                   row.period_stop,
-                                   row.major1,
-                                   row.major2,
-                                   row.concentration,
-                                   row.minor,
-                                   row.requirement_text])
-      cursor.execute(f"insert into requirement_blocks values {vals}", (db_record))
+  # if institution_rowcount == 1:
+  #   last_update = str(cursor.fetchone().last_update)
+  # else:
+  #   last_update = ''
+  # if institution_rowcount == 0 or last_update != load_date:
+  #   cursor.execute(f"delete from requirement_blocks where institution = '{institution}'")
+  #   if args.verbose:
+  #     suffix = 's'
+  #     if cursor.rowcount == 1:
+  #       suffix = ''
+  #     print(f'Replace {cursor.rowcount:6,} requirement block{suffix} '
+  #           f'dated {last_update} for {institution}')
+  cursor.execute("""insert into updates values (%s, %s)
+                        on conflict (institution)
+                        do update set last_update = %s
+                 """, (institution, load_date, load_date))
+
+  for row in institutions[institution].rows:
+    db_record = DB_Record._make([institution,
+                                 row.requirement_id,
+                                 row.block_type,
+                                 row.block_value,
+                                 row.title,
+                                 row.period_start,
+                                 row.period_stop,
+                                 row.major1,
+                                 row.major2,
+                                 row.concentration,
+                                 row.minor,
+                                 row.requirement_text])
+    set_clause = 'set '
+    set_clause += ', '.join([f'{col} = %s' for col in db_cols])
+    cursor.execute(f"""update requirement_blocks {set_clause}
+                       where requirement_id = %s and institution = %s;
+                       insert into requirement_blocks values {vals}
+                       on conflict do nothing
+                    """, (db_record + (row.requirement_id, institution) + db_record))
 db.commit()
 db.close()
 
-# Archive the csv file
-os.rename(file, f'./query_archive/DAP_REQ_BLOCK_{load_date}.csv')
-
+# Archive the file just processed
+file.rename(f'./query_archive/{file.stem}_{load_date}{file.suffix}')
