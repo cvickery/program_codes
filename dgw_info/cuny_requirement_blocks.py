@@ -52,6 +52,8 @@ from xml.etree.ElementTree import parse
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
 
+csv.field_size_limit(sys.maxsize)
+
 
 def csv_generator(file):
   """ Generate rows from a csv export of OIRA’s DAP_REQ_BLOCK table.
@@ -64,7 +66,10 @@ def csv_generator(file):
         cols = [col.lower().replace(' ', '_') for col in line]
         Row = namedtuple('Row', cols)
       else:
-        row = Row._make(line)
+        try:
+          row = Row._make(line)
+        except TypeError as type_error:
+          print(f'Ignored: |{line}|')
         yield row
 
 
