@@ -59,8 +59,10 @@ def csv_generator(file):
   """ Generate rows from a csv export of OIRA’s DAP_REQ_BLOCK table.
   """
   cols = None
-  with open(file, 'r') as query_file:
-    reader = csv.reader(query_file)
+  with open(file, newline='') as query_file:
+    reader = csv.reader(query_file,
+                        delimiter=args.delimiter,
+                        quotechar=args.quotechar)
     for line in reader:
       if cols is None:
         cols = [col.lower().replace(' ', '_') for col in line]
@@ -68,9 +70,9 @@ def csv_generator(file):
       else:
         try:
           row = Row._make(line)
+          yield row
         except TypeError as type_error:
-          print(f'Ignored: |{line}|')
-        yield row
+          print(f'{type_error}: |{line}|', file=sys.stderr)
 
 
 def xml_generator(file):
@@ -96,6 +98,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--debug', action='store_true', default=False)
 parser.add_argument('-v', '--verbose', action='store_true', default=False)
 parser.add_argument('-f', '--file', default='./queries/dap_req_block.xml')
+parser.add_argument('-de', '--delimiter', default=',')
+parser.add_argument('-q', '--quotechar', default='"')
 args = parser.parse_args()
 
 db_cols = ['institution',
