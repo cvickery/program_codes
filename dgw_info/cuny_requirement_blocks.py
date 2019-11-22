@@ -54,6 +54,21 @@ from psycopg2.extras import NamedTupleCursor
 
 csv.field_size_limit(sys.maxsize)
 
+trans_dict = dict()
+for c in range(14, 31):
+  trans_dict[c] = None
+
+cruft_table = str.maketrans(trans_dict)
+
+
+def decruft(block):
+  """ Remove chars in the range 0x0e through 0x1f and return the block otherwise unchanged.
+      This is the same thing strip_file does, which has to be run before this program for xml
+      files. But for csv files where strip_files wasn't run, this makes the text cleaner, avoiding
+      possible parsing problems.
+  """
+  return block.translate(cruft_table)
+
 
 def csv_generator(file):
   """ Generate rows from a csv export of OIRA’s DAP_REQ_BLOCK table.
@@ -97,7 +112,7 @@ def xml_generator(file):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--debug', action='store_true', default=False)
 parser.add_argument('-v', '--verbose', action='store_true', default=False)
-parser.add_argument('-f', '--file', default='./queries/dap_req_block.xml')
+parser.add_argument('-f', '--file', default='./downloads/dap_req_block.csv')
 parser.add_argument('-de', '--delimiter', default=',')
 parser.add_argument('-q', '--quotechar', default='"')
 args = parser.parse_args()
@@ -198,7 +213,7 @@ for institution in institutions.keys():
                                  row.major2,
                                  row.concentration,
                                  row.minor,
-                                 row.requirement_text])
+                                 decruft(row.requirement_text.replace('\t', ' '))])
     set_clause = 'set '
     set_clause += ', '.join([f'{col} = %s' for col in db_cols])
     cursor.execute(f"""update requirement_blocks {set_clause}
@@ -211,4 +226,5 @@ db.commit()
 db.close()
 
 # Archive the file just processed
-file.rename(f'./query_archive/{file.stem}_{load_date}{file.suffix}')
+file.rename(f'/Users/vickery/registered_programs/dgw_info/query_archive/'
+            f'{file.stem}_{load_date}{file.suffix}')
