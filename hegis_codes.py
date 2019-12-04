@@ -3,6 +3,7 @@
 from datetime import datetime
 from AdvancedHTMLParser import AdvancedHTMLParser
 import requests
+import socket
 
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
@@ -15,7 +16,7 @@ try:
 except requests.exceptions.ConnectionError as err:
   send_message([{'name': 'Christopher Vickery', 'email': 'cvickery@qc.cuny.edu'}],
                {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
-               'HEGIS Code Update Failed',
+               f'HEGIS Code Update Failed on {socket.hostname()}',
                f'<p>{err}</p>')
   exit()
 
