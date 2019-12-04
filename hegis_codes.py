@@ -56,6 +56,6 @@ for table in tables:
 
 changes = parser.getElementsByClassName('pane-node-changed')
 update_date = datetime.strptime(changes[0].children[1].innerText.strip(), '%B %d, %Y - %I:%M%p')
-cursor.execute(f"update updates set last_update = '{update_date}') where institution = 'hegis'")
+cursor.execute(f"update updates set last_update = '{update_date}' where institution = 'hegis'")
 db.commit()
 db.close()
