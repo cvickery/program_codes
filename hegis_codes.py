@@ -6,10 +6,21 @@ import requests
 
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
+from sendemail import send_message
+
+# Be sure the NYSED website is accessible before proceeding.
+try:
+  r = requests.get('http://www.nysed.gov/college-university-evaluation/'
+                   'new-york-state-taxonomy-academic-programs-hegis-codes').text
+except requests.exceptions.ConnectionError as err:
+  send_message([{'name': 'Christopher Vickery', 'email': 'cvickery@qc.cuny.edu'}],
+               {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
+               'HEGIS Code Update Failed',
+               f'<p>{err}</p>')
+  exit()
 
 db = psycopg2.connect('dbname=cuny_programs')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
-
 cursor.execute('drop table if exists hegis_areas, hegis_codes')
 cursor.execute("""
                   create table hegis_areas (
@@ -22,12 +33,11 @@ cursor.execute("""
                   );
                """)
 
+parser = AdvancedHTMLParser()
+parser.parseStr(r)
+
 area_name = None
 area_id = -1
-parser = AdvancedHTMLParser()
-r = requests.get('http://www.nysed.gov/college-university-evaluation/'
-                 'new-york-state-taxonomy-academic-programs-hegis-codes').text
-parser.parseStr(r)
 tables = parser.getElementsByTagName('table')
 for table in tables:
   assert table.children[0].tagName == 'caption'
@@ -45,6 +55,6 @@ for table in tables:
 
 changes = parser.getElementsByClassName('pane-node-changed')
 update_date = datetime.strptime(changes[0].children[1].innerText.strip(), '%B %d, %Y - %I:%M%p')
-# cursor.execute('*** decide which database these tables belong in. cuny_program or courses***')
+# cursor.execute('*** decide which database these tables belong in. cuny_programs or courses***')
 db.commit()
 db.close()
