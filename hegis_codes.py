@@ -16,7 +16,7 @@ try:
 except requests.exceptions.ConnectionError as err:
   send_message([{'name': 'Christopher Vickery', 'email': 'cvickery@qc.cuny.edu'}],
                {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
-               f'HEGIS Code Update Failed on {socket.hostname()}',
+               f'HEGIS Code Update Failed on {socket.gethostname()}',
                f'<p>{err}</p>')
   exit()
 
@@ -56,6 +56,6 @@ for table in tables:
 
 changes = parser.getElementsByClassName('pane-node-changed')
 update_date = datetime.strptime(changes[0].children[1].innerText.strip(), '%B %d, %Y - %I:%M%p')
-# cursor.execute('*** decide which database these tables belong in. cuny_programs or courses***')
+cursor.execute(f"update updates set last_update = '{update_date}') where institution = 'hegis'")
 db.commit()
 db.close()
