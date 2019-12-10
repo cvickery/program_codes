@@ -154,7 +154,7 @@ else:
 
 # Gather all the rows for all the institutions
 for row in generator(file):
-  institution = row.institution.lower().strip('10')
+  institution = row.institution.upper()
 
   # Integrity check: all rows for an institution must have the same load date.
   load_date = row.irdw_load_date[0:10]

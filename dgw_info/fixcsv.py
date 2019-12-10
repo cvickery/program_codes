@@ -21,17 +21,37 @@ args = parser.parse_args()
 delimiter = args.delimiter
 quotechar = args.quotechar
 
+
 in_field = False
-last_char = None
+
 with sys.stdin as infile:
   with sys.stdout as outfile:
     while True:
       ch = infile.read(1)
       if not ch:
         exit()
+      # Skip bogus control codes
       if ord(ch) < 0x20 and ord(ch) > 0x0d:
         continue
       if ch == quotechar:
+        # Patterns to deal with:
+        #   ..., "This is ""ok"" because the quotes are doubled", ...
+        #   ..., "This is "not ok" because the quotes are not doubled", ...
+        #   That is, a quotechar inside a field doesn't necessarily end the field. It depends on
+        #   what came before, and what comes next.
+        if in_field:
+          # The next non-whitespace has to be a delimiter, otherwise, this char has to be escaped
+          # (doubled -- there is no escape char in CSV)
+          next_char = infile.read(1)
+          if next_char == quotechar:
+            # This is the normal, ok, case.
+            outfile.write(ch)
+            outfile.write(next_char)
+            continue
+          else:
+            # This isn't going to work. What if there is an unescaped string at the end of a field?
+            #   ..., "This is a known "problem"", ...
+            pass  # I give up
         in_field = not in_field
         # if in_field:
         #   outfile.write(grn)
@@ -44,6 +64,5 @@ with sys.stdin as infile:
       if ch == CR and in_field:
         continue
       outfile.write(ch)
-      last_char = ch
       # print(f' {ch}', file=sys.stderr, end='')
 print()
