@@ -6,16 +6,19 @@
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
-psql cuny_courses -c "select update_date from updates where table_name = 'registered_programs'"| \
-  ack '\d{4}-\d{2}-\d{2}'>/dev/null
-if [[ $? == 1 ]]
+psql cuny_courses -tXc \
+"select update_date from updates where table_name = 'registered_programs'" | pbcopy
+update_date=`pbpaste|tr -d ' '`
+if [[ $update_date == '' ]]
 then echo -n "(Re-)create the registered_programs table ... "
-     psql -X -q -d cuny_courses -f registered_programs.sql
-     if [[ $? == 0 ]]
-     then echo done.
-     else echo Failed!
-          exit 1
-     fi
+     psql -qXd cuny_courses -f registered_programs.sql
+else echo -n "Archive registered_programs table $update_date ... "
+     pg_dump cuny_courses -t registered_programs > "./archives/registered_programs_${update_date}.sql"
+fi
+if [[ $? == 0 ]]
+then echo done.
+else echo Failed!
+    exit 1
 fi
 
 # Generate/update the database entries and csv file for each college
