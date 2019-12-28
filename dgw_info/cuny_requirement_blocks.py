@@ -235,5 +235,5 @@ db.commit()
 db.close()
 
 # Archive the file just processed
-file.rename(f'/Users/vickery/registered_programs/dgw_info/query_archive/'
+file.rename(f'/Users/vickery/registered_programs/dgw_info/archives/'
             f'{file.stem}_{load_date}{file.suffix}')
