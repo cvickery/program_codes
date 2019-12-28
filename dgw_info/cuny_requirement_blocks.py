@@ -165,13 +165,29 @@ for row in generator(file):
 
   institutions[institution].rows.append(row)
 
-# Process the rows, institution by institution
+# Create the requirement_blocks table if it doesn’t already exist
+cursor.execute("""create table if not exists requirement_blocks (
+                  institution text,
+                  requirement_id text,
+                  block_type text,
+                  block_value text,
+                  title text,
+                  period_start text,
+                  period_stop text,
+                  major1 text,
+                  major2 text,
+                  concentration text,
+                  minor text,
+                  requirement_text text,
+                  primary key (institution, requirement_id))""")
+
+# Process the rows from the csv or xml file, institution by institution
 for institution in institutions.keys():
-  # Report what was already available for this institution
+  # Delete what was already available for this institution
+  cursor.execute(f'delete from requirement_blocks where institution = %s',
+                 (institution, ))
   if args.verbose:
-    cursor.execute(f'select count(*) from requirement_blocks where institution = %s',
-                   (institution, ))
-    num_blocks = int(cursor.fetchone()[0])
+    num_blocks = cursor.rowcount
     suffix = '' if num_blocks == 1 else 's'
     print(f'Replacing {num_blocks:,} existing blocks for {institution}')
 
