@@ -20,7 +20,7 @@ except requests.exceptions.ConnectionError as err:
                f'<p>{err}</p>')
   exit()
 
-db = psycopg2.connect('dbname=cuny_programs')
+db = psycopg2.connect('dbname=cuny_courses')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 cursor.execute('drop table if exists hegis_areas, hegis_codes')
 cursor.execute("""
@@ -56,6 +56,6 @@ for table in tables:
 
 changes = parser.getElementsByClassName('pane-node-changed')
 update_date = datetime.strptime(changes[0].children[1].innerText.strip(), '%B %d, %Y - %I:%M%p')
-cursor.execute(f"update updates set last_update = '{update_date}' where institution = 'HEGIS'")
+cursor.execute(f"update updates set update_date = '{update_date}' where table_name = 'hegis_codes'")
 db.commit()
 db.close()

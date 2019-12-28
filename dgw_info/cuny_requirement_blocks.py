@@ -134,7 +134,7 @@ vals = '(' + vals.strip(', ') + ')'
 
 DB_Record = namedtuple('DB_Record', db_cols)
 
-db = psycopg2.connect('dbname=cuny_programs')
+db = psycopg2.connect('dbname=cuny_courses')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 
 # Dict of rows by institution
@@ -169,16 +169,11 @@ for row in generator(file):
 for institution in institutions.keys():
   # Report what was already available for this institution
   if args.verbose:
-    last_update = 'never'
-    cursor.execute("select * from updates where institution = %s", (institution, ))
-    if cursor.rowcount == 1:
-      last_update = str(cursor.fetchone().last_update)
     cursor.execute(f'select count(*) from requirement_blocks where institution = %s',
                    (institution, ))
     num_blocks = int(cursor.fetchone()[0])
     suffix = '' if num_blocks == 1 else 's'
-    print(f'Found {num_blocks:,} existing blocks for {institution}, '
-          f'last updated {last_update}')
+    print(f'Replacing {num_blocks:,} existing blocks for {institution}')
 
   load_date = institutions[institution].load_date
   # Desired date format: YYYY-MM-DD
@@ -195,11 +190,6 @@ for institution in institutions.keys():
   if args.verbose:
     print(f'Processing {num_records:,} record{suffix} dated {load_date} '
           f'from {file} for {institution}')
-
-  cursor.execute("""insert into updates values (%s, %s)
-                        on conflict (institution)
-                        do update set last_update = %s
-                 """, (institution, load_date, load_date))
 
   for row in institutions[institution].rows:
     db_record = DB_Record._make([institution,
@@ -222,6 +212,9 @@ for institution in institutions.keys():
                        on conflict do nothing
                     """, (db_record + (row.requirement_id, institution) + db_record))
 
+cursor.execute(f"""update updates
+                      set update_date = '{load_date}'
+                    where table_name = 'requirement_blocks'""")
 db.commit()
 db.close()
 
