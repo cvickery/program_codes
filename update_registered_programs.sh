@@ -53,6 +53,7 @@ psql cuny_courses -c "update updates set update_date = '`gdate -I`' \
         n=$(( ${#all[@]} - 1 ))
         latest=${all[$n]}
         cp $latest ./downloads/dap_req_block.csv
+        echo "No new dap_req_block.csv in downloads. Using $latest."
   fi
   ./cuny_requirement_blocks.py
 )
