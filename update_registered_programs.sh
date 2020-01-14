@@ -42,3 +42,17 @@ psql cuny_courses -c"copy (select * from registered_programs order by institutio
 # Record the date of this update
 psql cuny_courses -c "update updates set update_date = '`gdate -I`' \
                         where table_name = 'registered_programs'"
+
+# Recreate the requirements_blocks table, using the latest available csv file.
+(
+  cd ./dgw_info
+  if [[ ! -e downloads/dap_req_block.csv ]]
+  then  # Find the latest file in the archives folder
+        shopt -s nullglob
+        all=(./archives/dap*)
+        n=$(( ${#all[@]} - 1 ))
+        latest=${all[$n]}
+        cp $latest ./downloads/dap_req_block.csv
+  fi
+  ./cuny_requirement_blocks.py
+)
