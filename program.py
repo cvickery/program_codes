@@ -1,6 +1,8 @@
 """ The Program class, which is a list of NYS-registered academic programs.
 """
+import sys
 import re
+from typing import Dict, Any
 from recordclass import recordclass
 
 _items = ['institution',
@@ -45,7 +47,7 @@ class Program(object):
                'TAP', 'APTS', 'VVTA']
 
   # The (public) programs dict is a class variable, indexed by program_code.
-  programs = {}
+  programs: Dict[str, Any] = {}
 
   def __new__(self, program_code, unit_code=None, formats=None):
     """ Return unique object for this program_code; create it first if necessary.
@@ -66,9 +68,10 @@ class Program(object):
     if self.formats is None:
       self.formats = formats
 
-  @property
-  def variant(self, variant_tuple):
-    return self.variants[variant_tuple]
+  # @property
+  # def variant(self, variant_tuple):
+  #   print(f'*** variant getter called for {variant_tuple}', file=sys.stderr)
+  #   return self.variants[variant_tuple]
 
   def new_variant(self, award, hegis, institution, **kwargs):
     assert re.match(r'\d{4}\.\d{2}', hegis), f'Invalid hegis code: “{hegis}”'
