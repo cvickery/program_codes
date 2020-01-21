@@ -3,6 +3,13 @@
 # Get latest HEGIS code list from NYS and rebuild the hegis_area and hegis_codes tables.
 ./hegis_codes.py
 
+# Get the latest list of NYS institutions
+./nys_institutions.py
+if [[ $? != 0 ]]
+then echo 'Update NYS Institutions Failed!'
+     exit 1
+fi
+
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
@@ -24,16 +31,14 @@ fi
 # Generate/update the database entries and csv file for each college
 for inst in bar bcc bkl bmc cty csi grd hos htr jjc kcc lag law leh mec ncc nyt qcc qns sps yrk
 do
-  python3 registered_programs.py -cvu $inst
-  if [[ $? == 0 ]]
-  then # replace existing spreadsheet(s) for this institution
-       rm -f csv_files/`echo $inst|tr a-z A-Z`*csv
-       mv `echo $inst|tr a-z A-Z`*csv csv_files
-  else exit 1
+  python3 registered_programs.py -vu $inst
+  if [[ $? != 0 ]]
+  then  echo "Update failed for $inst"
+        exit 1
   fi
 done
 
-# Update the csv file for all institutions
+# Generate the csv file for all institutions
 rm -f csv_files/ALL*
 path_name="`pwd`/csv_files/ALL_`gdate -I`.csv"
 psql cuny_courses -c"copy (select * from registered_programs order by institution, program_code) \
@@ -43,7 +48,7 @@ psql cuny_courses -c"copy (select * from registered_programs order by institutio
 psql cuny_courses -c "update updates set update_date = '`gdate -I`' \
                         where table_name = 'registered_programs'"
 
-# Recreate the requirements_blocks table, using the latest available csv file.
+# Recreate the requirements_blocks table, using the latest available csv file from OIRA.
 (
   cd ./dgw_info
   if [[ ! -e downloads/dap_req_block.csv ]]
