@@ -1,5 +1,6 @@
 #! /usr/local/bin/bash
 
+echo Start update at `date`
 # Copy IPEDS CIP codes to the cip_codes table.
 echo -n 'Recreate CIP Codes table ... '
 ./cip_codes.py
@@ -80,5 +81,7 @@ else echo 'done.'
 fi
 
 # Record the date of this update
-psql cuny_courses -c "update updates set update_date = '`gdate -I`' \
+psql cuny_courses -Xqc "update updates set update_date = '`gdate -I`' \
                         where table_name = 'registered_programs'"
+
+echo End update at `date`
