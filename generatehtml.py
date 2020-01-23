@@ -1,0 +1,200 @@
+#! /usr/local/bin/python3
+
+from pgconnection import PgConnection
+from knowninstitutions import known_institutions
+from cipcodes import cip_codes
+
+from collections import namedtuple
+
+
+# fix_title()
+# -------------------------------------------------------------------------------------------------
+def fix_title(str):
+  """ Create a better titlecase string, taking specifics of the registered_programs dataset into
+      account.
+  """
+  return (str.strip(' *')
+             .title()
+             .replace('Cuny', 'CUNY')
+             .replace('Mhc', 'MHC')
+             .replace('Suny', 'SUNY')
+             .replace('\'S', '’s')
+             .replace('1St', '1st')
+             .replace('6Th', '6th')
+             .replace(' And ', ' and ')
+             .replace(' Of ', ' of ')
+             .replace('\'', '’'))
+
+
+# andor_list()
+# -------------------------------------------------------------------------------------------------
+def andor_list(items, andor='and'):
+  """ Join a list of stings into a comma-separated con/disjunction.
+      Forms:
+        a             a
+        a and b       a or b
+        a, b, and c   a, b, or c
+  """
+  return_str = ', '.join(items)
+  k = return_str.rfind(',')
+  if k > 0:
+    k += 1
+    return_str = return_str[:k] + f' {andor}' + return_str[k:]
+  if return_str.count(',') == 1:
+    return_str = return_str.replace(',', '')
+  return return_str
+
+
+# generate_html()
+# -------------------------------------------------------------------------------------------------
+def generate_html():
+  """ Generate the html for registered programs rows
+  """
+  conn = PgConnection()
+  cursor = conn.cursor()
+  plan_cursor = conn.cursor()  # For looking up individual plans in CUNYfirst
+
+  # Find out what CUNY colleges are in the db
+  cursor.execute("""
+                 select distinct r.target_institution as inst, i.name
+                 from registered_programs r, institutions i
+                 where i.code = upper(r.target_institution||'01')
+                 order by i.name
+                 """)
+
+  if cursor.rowcount < 1:
+    conn.close()
+    exit("There is no registered-program information for CUNY colleges available at this time")
+
+  cuny_institutions = dict([(row.inst, row.name) for row in cursor.fetchall()])
+  cursor.execute('select hegis_code, description from hegis_codes')
+  hegis_codes = {row.hegis_code: row.description for row in cursor.fetchall()}
+
+  # List of short CUNY institution names plus known non-CUNY names
+  # Start with the list of all known institutions, then replace CUNY names with their short names.
+  short_names = dict()
+  for key in known_institutions.keys():
+    short_names[key] = known_institutions[key][1]  # value is (prog_code, name, is_cuny)
+  cursor.execute("""
+                    select code, prompt
+                      from institutions
+                 """)
+  for row in cursor.fetchall():
+    short_names[row.code.lower()[0:3]] = row.prompt
+
+  # Generate the HTML table: data rows
+  cursor.execute("""
+                 select program_code,
+                        unit_code,
+                        institution,
+                        title,
+                        formats,
+                        hegis,
+                        award,
+                        certificate_license,
+                        accreditation,
+                        first_registration_date,
+                        last_registration_action,
+                        tap, apts, vvta,
+                        target_institution,
+                        is_variant
+                 from registered_programs
+                 order by title, program_code
+                 """)
+  data_rows = []
+  for row in cursor.fetchall():
+    if row.is_variant:
+      class_str = ' class="variant"'
+    else:
+      class_str = ''
+
+    values = list(row)
+    values.pop()  # Don’t display is_variant value: it is indicated by the row’s class.
+    values.pop()  # Don’t display institution.
+
+    # If the institution column is a numeric string, it’s a non-CUNY partner school, but the
+    # name is available in the known_institutions dict.
+    if values[2].isdecimal():
+      values[2] = fix_title(known_institutions[values[2]][1])
+
+    # Add title with hegis code description to hegis_code column
+    try:
+      description = hegis_codes[values[5]]
+      element_class = ''
+    except KeyError as ke:
+      description = 'Unknown HEGIS Code'
+      element_class = ' class="error"'
+    values[5] = f'<span title="{description}"{element_class}>{values[5]}</span>'
+
+    # Insert list of all CUNY programs (plans) for this program code
+    plan_cursor.execute("""
+                          select * from cuny_programs
+                           where nys_program_code = %s
+                           and program_status = 'A'""", (values[0],))
+    cuny_cell_content = ''
+    cip_set = set()
+    if plan_cursor.rowcount > 0:
+      plans = plan_cursor.fetchall()
+      # There is just one program and description per college, but the program may be shared
+      # among multiple departments at a college.
+      Program_Info = namedtuple('Program_Info', 'program program_title departments')
+      program_info = dict()
+      program = None
+      program_title = None
+      for plan in plans:
+        cip_set.add(plan.cip_code)
+        institution_key = plan.institution.lower()[0:3]
+        if institution_key not in program_info.keys():
+          program_info[institution_key] = Program_Info._make([plan.academic_plan,
+                                                             plan.description,
+                                                             []
+                                                              ])
+        program_info[institution_key].departments.append(plan.department)
+
+      # Add information for this institution to the table cell
+      if len(program_info.keys()) > 1:
+        cuny_cell_content += '— <em>Multiple Institutions</em> —<br>'
+        show_institution = True
+      else:
+        show_institution = False
+      for inst in program_info.keys():
+        program = program_info[inst].program
+        program_title = program_info[inst].program_title
+        if show_institution:
+          if inst in short_names.keys():
+            inst_str = f'{short_names[inst]}: '
+          else:
+            inst_str = f'{inst}: '
+        else:
+          inst_str = ''
+        departments_str = andor_list(program_info[inst].departments)
+        cuny_cell_content += f" {inst_str}{program} ({departments_str})<br>{program_title}"
+        # If there is a dgw requirement block for the plan, use link to it
+        institution = row.institution
+        plan_cursor.execute("""
+                           select *
+                             from requirement_blocks
+                            where institution ~* %s
+                              and block_value = %s
+                           """, (institution, plan.academic_plan))
+        if plan_cursor.rowcount > 0:
+          cuny_cell_content += (f'<br><a href="/requirements/?college='
+                                f'{institution.upper() + "01"}'
+                                f'&requirement-type=MAJOR&requirement-name={program}">'
+                                f'Requirements</a>')
+        if show_institution:
+          cuny_cell_content += '<br>'
+    cip_cell = [f'<span title="{cip_codes(cip)}">{cip}</span>' for cip in sorted(cip_set)]
+    values.insert(7, '<br>'.join(cip_cell))
+    values.insert(8, cuny_cell_content)
+    cells = ''.join([f'<td>{value}</td>' for value in values]).replace('\'', '’')
+    cursor.execute(f"""update registered_programs set html='<tr{class_str}>{cells}</tr>'
+                       where target_institution = %s
+                         and program_code = %s
+                    """, (row.target_institution, row.program_code))
+  conn.commit()
+  conn.close()
+
+
+if __name__ == '__main__':
+  generate_html()
