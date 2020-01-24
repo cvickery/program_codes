@@ -68,11 +68,6 @@ class Program(object):
     if self.formats is None:
       self.formats = formats
 
-  # @property
-  # def variant(self, variant_tuple):
-  #   print(f'*** variant getter called for {variant_tuple}', file=sys.stderr)
-  #   return self.variants[variant_tuple]
-
   def new_variant(self, award, hegis, institution, **kwargs):
     assert re.match(r'\d{4}\.\d{2}', hegis), f'Invalid hegis code: “{hegis}”'
     variant_tuple = (award, hegis, institution)
