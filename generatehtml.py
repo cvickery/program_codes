@@ -5,7 +5,7 @@ from knowninstitutions import known_institutions
 from cipcodes import cip_codes
 
 from collections import namedtuple
-
+import json
 
 # fix_title()
 # -------------------------------------------------------------------------------------------------
@@ -82,7 +82,8 @@ def generate_html():
   for row in cursor.fetchall():
     short_names[row.code.lower()[0:3]] = row.prompt
 
-  # Generate the HTML table: data rows
+  # Generate the HTML and CSV values for each row of the respective tables, and save them in the
+  # registered_programs table as html and csv column data.
   cursor.execute("""
                  select program_code,
                         unit_code,
@@ -101,37 +102,44 @@ def generate_html():
                  from registered_programs
                  order by title, program_code
                  """)
-  data_rows = []
   for row in cursor.fetchall():
+    # Parallel structures for the HTML and CSV cells
     if row.is_variant:
       class_str = ' class="variant"'
     else:
       class_str = ''
+    html_values = list(row)
+    csv_values = list(row)
 
-    values = list(row)
-    values.pop()  # Don’t display is_variant value: it is indicated by the row’s class.
-    values.pop()  # Don’t display institution.
+    # Don’t display is_variant value: it is indicated by the row’s class.
+    # Don’t display institution.
+    html_values.pop()
+    html_values.pop()
+    csv_values.pop()
+    csv_values.pop()
 
     # If the institution column is a numeric string, it’s a non-CUNY partner school, but the
     # name is available in the known_institutions dict.
-    if values[2].isdecimal():
-      values[2] = fix_title(known_institutions[values[2]][1])
+    if html_values[2].isdecimal():
+      html_values[2] = fix_title(known_institutions[html_values[2]][1])
+      csv_values[2] = html_values[2]
 
     # Add title with hegis code description to hegis_code column
     try:
-      description = hegis_codes[values[5]]
+      description = hegis_codes[html_values[5]]
       element_class = ''
     except KeyError as ke:
       description = 'Unknown HEGIS Code'
       element_class = ' class="error"'
-    values[5] = f'<span title="{description}"{element_class}>{values[5]}</span>'
+    html_values[5] = f'<span title="{description}"{element_class}>{html_values[5]}</span>'
+    csv_values[5] = f'{csv_values[5]} ({description})'
 
     # Insert list of all CUNY programs (plans) for this program code
-    plan_cursor.execute("""
-                          select * from cuny_programs
+    plan_cursor.execute("""select * from cuny_programs
                            where nys_program_code = %s
-                           and program_status = 'A'""", (values[0],))
-    cuny_cell_content = ''
+                           and program_status = 'A'""", (html_values[0],))
+    cuny_cell_html_content = ''
+    cuny_cell_csv_content = ''
     cip_set = set()
     if plan_cursor.rowcount > 0:
       plans = plan_cursor.fetchall()
@@ -153,7 +161,8 @@ def generate_html():
 
       # Add information for this institution to the table cell
       if len(program_info.keys()) > 1:
-        cuny_cell_content += '— <em>Multiple Institutions</em> —<br>'
+        cuny_cell_html_content += '— <em>Multiple Institutions</em> —<br>'
+        cuny_cell_csv_content += 'Multiple Institutions: '
         show_institution = True
       else:
         show_institution = False
@@ -168,7 +177,8 @@ def generate_html():
         else:
           inst_str = ''
         departments_str = andor_list(program_info[inst].departments)
-        cuny_cell_content += f" {inst_str}{program} ({departments_str})<br>{program_title}"
+        cuny_cell_html_content += f' {inst_str}{program} ({departments_str})<br>{program_title}'
+        cuny_cell_csv_content += f'{inst_str}{program} ({departments_str})\n{program_title}'
         # If there is a dgw requirement block for the plan, use link to it
         institution = row.institution
         plan_cursor.execute("""
@@ -178,20 +188,36 @@ def generate_html():
                               and block_value = %s
                            """, (institution, plan.academic_plan))
         if plan_cursor.rowcount > 0:
-          cuny_cell_content += (f'<br><a href="/requirements/?college='
-                                f'{institution.upper() + "01"}'
-                                f'&requirement-type=MAJOR&requirement-name={program}">'
-                                f'Requirements</a>')
+          cuny_cell_html_content += (f'<br><a href="/requirements/?college='
+                                     f'{institution.upper() + "01"}'
+                                     f'&requirement-type=MAJOR&requirement-name={program}">'
+                                     f'Requirements</a>')
+          # IDEALLY the host would automatically adjust to the deployment target (ra.qc.cuny.edu,
+          # Heroku, or Lehman, etc). But it's hard-coded here ... for now.
+          host = 'transfer-app.qc.cuny.edu'
+          cuny_cell_csv_content += (f'\nhttps://{host}/requirements/?college='
+                                    f'{institution.upper() + "01"}'
+                                    f'&requirement-type=MAJOR&requirement-name={program}')
         if show_institution:
-          cuny_cell_content += '<br>'
-    cip_cell = [f'<span title="{cip_codes(cip)}">{cip}</span>' for cip in sorted(cip_set)]
-    values.insert(7, '<br>'.join(cip_cell))
-    values.insert(8, cuny_cell_content)
-    cells = ''.join([f'<td>{value}</td>' for value in values]).replace('\'', '’')
-    cursor.execute(f"""update registered_programs set html='<tr{class_str}>{cells}</tr>'
+          cuny_cell_html_content += '<br>'
+          cuny_cell_csv_content += '\n'
+    cip_html_cell = [f'<span title="{cip_codes(cip)}">{cip}</span>' for cip in sorted(cip_set)]
+    cip_csv_cell = [f'{cip} ({cip_codes(cip).strip(".")})' for cip in sorted(cip_set)]
+    html_values.insert(7, '<br>'.join(cip_html_cell))
+    csv_values.insert(7, ', '.join(cip_csv_cell))
+    html_values.insert(8, cuny_cell_html_content)
+    csv_values.insert(8, cuny_cell_csv_content)
+
+    html_cells = ''.join([f'<td>{value}</td>' for value in html_values]).replace("\'", "’")
+
+    cursor.execute(f"""update registered_programs set html='<tr{class_str}>{html_cells}</tr>'
                        where target_institution = %s
                          and program_code = %s
                     """, (row.target_institution, row.program_code))
+    cursor.execute(f"""update registered_programs set csv=%s
+                        where target_institution = %s
+                          and program_code = %s
+                     """, (json.dumps(csv_values), row.target_institution, row.program_code))
   conn.commit()
   conn.close()
 
