@@ -20,6 +20,7 @@ create table registered_programs (
   vvta                      text default 'unknown',
   is_variant                boolean default False,
   html                      text default '',
+  csv                       text default '',
   primary key (target_institution, institution, program_code, award, hegis)
 );
 
