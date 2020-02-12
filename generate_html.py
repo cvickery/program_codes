@@ -7,6 +7,7 @@ from cipcodes import cip_codes
 from collections import namedtuple
 import json
 
+
 # fix_title()
 # -------------------------------------------------------------------------------------------------
 def fix_title(str):
@@ -57,7 +58,7 @@ def generate_html():
   # Find out what CUNY colleges are in the db
   cursor.execute("""
                  select distinct r.target_institution as inst, i.name
-                 from registered_programs r, institutions i
+                 from registered_programs r, cuny_institutions i
                  where i.code = upper(r.target_institution||'01')
                  order by i.name
                  """)
@@ -77,7 +78,7 @@ def generate_html():
     short_names[key] = known_institutions[key][1]  # value is (prog_code, name, is_cuny)
   cursor.execute("""
                     select code, prompt
-                      from institutions
+                      from cuny_institutions
                  """)
   for row in cursor.fetchall():
     short_names[row.code.lower()[0:3]] = row.prompt
@@ -214,10 +215,12 @@ def generate_html():
                        where target_institution = %s
                          and program_code = %s
                     """, (row.target_institution, row.program_code))
+
     cursor.execute(f"""update registered_programs set csv=%s
                         where target_institution = %s
                           and program_code = %s
                      """, (json.dumps(csv_values), row.target_institution, row.program_code))
+
   conn.commit()
   conn.close()
 

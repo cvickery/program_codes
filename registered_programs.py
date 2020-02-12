@@ -47,14 +47,20 @@ import cssselect
 
 import csv
 
-import psycopg2
-from psycopg2.extras import NamedTupleCursor
+from pgconnection import PgConnection
 
 from program import Program
-from known_institutions import known_institutions
 
 __author__ = 'Christopher Vickery'
 __version__ = 'April 2019'
+
+
+known_institutions = dict()
+conn = PgConnection()
+cursor = conn.cursor()
+cursor.execute("select * from nys_institutions")
+known_institutions = {row.id: (row.institution_id, row.institution_name, row.is_cuny) for row in cursor.fetchall()}
+conn.close()
 
 
 def detail_lines(all_lines, debug=False):
@@ -386,13 +392,9 @@ if __name__ == '__main__':
       print(Program.html_table())
 
     if args.update_db:
-      if args.debug:
-        db_name = 'vickery'
-      else:
-        db_name = 'cuny_curriculum'
       # See registered_programs.sql for the schema of the table, which must already exist.
-      db = psycopg2.connect(f'dbname={db_name}')
-      cursor = db.cursor(cursor_factory=NamedTupleCursor)
+      conn = PgConnection()
+      cursor = conn.cursor()
       cursor.execute('delete from registered_programs where target_institution=%s',
                      (institution,))
       print('Replacing {} entries for {} with info for {} programs.'
@@ -412,8 +414,8 @@ if __name__ == '__main__':
           cursor.execute('insert into registered_programs values(' + ', '.join(['%s'] * len(values))
                          + ')', values)
 
-      db.commit()
-      db.close()
+      conn.commit()
+      conn.close()
 
   else:
     sys.exit('lookup_programs failed')

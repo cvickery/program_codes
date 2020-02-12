@@ -1,7 +1,8 @@
 #! /usr/local/bin/bash
 
-echo Start update at `date`
+echo Start update_registered_programs.py at `date`
 export PYTHON_PATH=/Users/vickery/Transfer_App/
+
 # Copy IPEDS CIP codes to the cip_codes table.
 echo -n 'Recreate CIP Codes table ... '
 ./cip_codes.py
@@ -72,9 +73,10 @@ done
   ./cuny_requirement_blocks.py
 )
 
-# Generate the HTML table rows for registered programs (including links to the requirement blocks)
-echo -n 'Generate HTML row elements for registered programs ...'
-./generatehtml.py
+# Generate the HTML and CSV table rows for registered programs (including links to the requirement
+# blocks)
+echo -n 'Generate HTML and CSV row elements for registered programs ...'
+./generate_html.py
 if [[ $? != 0 ]]
 then echo 'FAILED!'
      exit 1
@@ -85,4 +87,4 @@ fi
 psql cuny_curriculum -Xqc "update updates set update_date = '`gdate -I`' \
                         where table_name = 'registered_programs'"
 
-echo End update at `date`
+echo End update_registered_programs.py at `date`
