@@ -19,7 +19,7 @@ import cssselect
 import psycopg2
 from psycopg2.extras import NamedTupleCursor
 
-conn = psycopg2.connect('dbname=cuny_courses')
+conn = psycopg2.connect('dbname=cuny_curriculum')
 cursor = conn.cursor(cursor_factory=NamedTupleCursor)
 
 # (Re-)create the program_formats table

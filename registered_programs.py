@@ -389,7 +389,7 @@ if __name__ == '__main__':
       if args.debug:
         db_name = 'vickery'
       else:
-        db_name = 'cuny_courses'
+        db_name = 'cuny_curriculum'
       # See registered_programs.sql for the schema of the table, which must already exist.
       db = psycopg2.connect(f'dbname={db_name}')
       cursor = db.cursor(cursor_factory=NamedTupleCursor)

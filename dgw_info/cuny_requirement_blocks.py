@@ -134,7 +134,7 @@ vals = '(' + vals.strip(', ') + ')'
 
 DB_Record = namedtuple('DB_Record', db_cols)
 
-db = psycopg2.connect('dbname=cuny_courses')
+db = psycopg2.connect('dbname=cuny_curriculum')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 
 # Dict of rows by institution

@@ -1,6 +1,7 @@
 #! /usr/local/bin/bash
 
 echo Start update at `date`
+export PYTHON_PATH=/Users/vickery/Transfer_App/
 # Copy IPEDS CIP codes to the cip_codes table.
 echo -n 'Recreate CIP Codes table ... '
 ./cip_codes.py
@@ -31,14 +32,14 @@ fi
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
-psql cuny_courses -tXc \
+psql cuny_curriculum -tXc \
 "select update_date from updates where table_name = 'registered_programs'" | pbcopy
 update_date=`pbpaste|tr -d ' '`
 if [[ $update_date == '' ]]
 then echo -n "(Re-)create the registered_programs table ... "
-     psql -qXd cuny_courses -f registered_programs.sql
+     psql -qXd cuny_curriculum -f registered_programs.sql
 else echo -n "Archive registered_programs table $update_date ... "
-     pg_dump cuny_courses -t registered_programs > "./archives/registered_programs_${update_date}.sql"
+     pg_dump cuny_curriculum -t registered_programs > "./archives/registered_programs_${update_date}.sql"
 fi
 if [[ $? == 0 ]]
 then echo done.
@@ -81,7 +82,7 @@ else echo 'done.'
 fi
 
 # Record the date of this update
-psql cuny_courses -Xqc "update updates set update_date = '`gdate -I`' \
+psql cuny_curriculum -Xqc "update updates set update_date = '`gdate -I`' \
                         where table_name = 'registered_programs'"
 
 echo End update at `date`

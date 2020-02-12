@@ -20,7 +20,7 @@ except requests.exceptions.ConnectionError as err:
                f'<p>{err}</p>')
   exit()
 
-db = psycopg2.connect('dbname=cuny_courses')
+db = psycopg2.connect('dbname=cuny_curriculum')
 cursor = db.cursor(cursor_factory=NamedTupleCursor)
 cursor.execute('drop table if exists hegis_areas, hegis_codes')
 cursor.execute("""
