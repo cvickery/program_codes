@@ -1,0 +1,3 @@
+open --user CVickery --env-password sftp://st-edge.cuny.edu
+cd ODI-Queens
+mget -EO /Users/vickery/CUNY_Programs/dgw_info/downloads *dap_req_block*

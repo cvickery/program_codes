@@ -3,6 +3,14 @@
 echo Start update_registered_programs.py at `date`
 export PYTHON_PATH=/Users/vickery/Transfer_App/
 
+echo -n 'Get latest dap_req_block ...'
+# Download new dap_req_block.csv if there is one from OIRA
+export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
+if [[ `hostname` != 'cvlaptop.local' ]]
+then /usr/local/bin/lftp -f ./getcunyrc
+fi
+echo done
+
 # Copy IPEDS CIP codes to the cip_codes table.
 echo -n 'Recreate CIP Codes table ... '
 ./cip_codes.py
