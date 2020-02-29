@@ -6,7 +6,7 @@ export PYTHON_PATH=/Users/vickery/Transfer_App/
 echo -n 'Get latest dap_req_block ...'
 # Download new dap_req_block.csv if there is one from OIRA
 export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
-if [[ `hostname` != 'cvlaptop.local' ]]
+if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
 then /usr/local/bin/lftp -f ./getcunyrc
 fi
 echo done
