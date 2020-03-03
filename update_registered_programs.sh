@@ -1,7 +1,7 @@
 #! /usr/local/bin/bash
 
 echo Start update_registered_programs.py at `date`
-export PYTHON_PATH=/Users/vickery/Transfer_App/
+export PYTHONPATH=/Users/vickery/Transfer_App/
 
 echo -n 'Get latest dap_req_block ...'
 # Download new dap_req_block.csv if there is one from OIRA
