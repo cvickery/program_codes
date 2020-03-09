@@ -3,6 +3,35 @@
 echo Start update_registered_programs.py at `date`
 export PYTHONPATH=/Users/vickery/Transfer_App/
 
+# Archive that might/will get clobbered. The table must exist and have more than zero rows,
+# and the archive for today must not exist.
+today=`date +%Y-%m-%d`
+for table in cip_codes hegis_codes nys_institutions registered_programs requirement_blocks
+do
+  n=`psql -tqX cuny_curriculum -c "select count(*) from $table" 2> /dev/null`
+  if [[ $? != 0 ]]
+  then echo "  $table NOT archived: no table"
+       continue
+  fi
+  if [[ $n == 0 ]]
+  then echo "  $table NOT archived: is empty"
+       continue
+  fi
+  file=./archives/${table}_${today}.sql
+  if [[ -e $file ]]
+  then size=`wc -c < $file 2> /dev/null`
+    if [[ $size > 0 ]]
+    then echo "  $table NOT archived: non-empty archive for $today exists"
+         continue
+    fi
+  fi
+  pg_dump cuny_curriculum -t $table > $file
+  if [[ $? == 0 ]]
+  then echo "  Archived $table to $file OK"
+  else echo "  Archive $table to $file FAILED"
+  fi
+done
+
 echo -n 'Get latest dap_req_block ...'
 # Download new dap_req_block.csv if there is one from OIRA
 export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
