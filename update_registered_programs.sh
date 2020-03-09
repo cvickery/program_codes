@@ -6,7 +6,12 @@ export PYTHONPATH=/Users/vickery/Transfer_App/
 # Archive that might/will get clobbered. The table must exist and have more than zero rows,
 # and the archive for today must not exist.
 today=`date +%Y-%m-%d`
-for table in cip_codes hegis_codes nys_institutions registered_programs requirement_blocks
+for table in cip_codes \
+hegis_areas \
+hegis_codes \
+nys_institutions \
+registered_programs \
+requirement_blocks
 do
   n=`psql -tqX cuny_curriculum -c "select count(*) from $table" 2> /dev/null`
   if [[ $? != 0 ]]
