@@ -1,41 +1,29 @@
 #! /usr/local/bin/bash
 
+function restore_from_archive()
+{
+  archives=(./archives/${1}*)
+  n=${#archives[@]}
+  if [[ $n > 0 ]]
+  then echo "RESTORING ${archives[$n-1]}"
+      (
+        export PGOPTIONS='--client-min-messages=warning'
+        psql -tqX cuny_curriculum -c "drop table if exists $1 cascade"
+        psql -tqX cuny_curriculum < ${archives[$n-1]}
+      )
+  else echo "ERROR: Unable to restore $1."
+      exit 1
+  fi
+}
 echo Start update_registered_programs.py at `date`
 export PYTHONPATH=/Users/vickery/Transfer_App/
 
-# Archive that might/will get clobbered. The table must exist and have more than zero rows,
-# and the archive for today must not exist.
-today=`date +%Y-%m-%d`
-for table in cip_codes \
-hegis_areas \
-hegis_codes \
-nys_institutions \
-registered_programs \
-requirement_blocks
-do
-  n=`psql -tqX cuny_curriculum -c "select count(*) from $table" 2> /dev/null`
-  if [[ $? != 0 ]]
-  then echo "  $table NOT archived: no table"
-       continue
-  fi
-  if [[ $n == 0 ]]
-  then echo "  $table NOT archived: is empty"
-       continue
-  fi
-  file=./archives/${table}_${today}.sql
-  if [[ -e $file ]]
-  then size=`wc -c < $file 2> /dev/null`
-    if [[ $size > 0 ]]
-    then echo "  $table NOT archived: non-empty archive for $today exists"
-         continue
-    fi
-  fi
-  pg_dump cuny_curriculum -t $table > $file
-  if [[ $? == 0 ]]
-  then echo "  Archived $table to $file OK"
-  else echo "  Archive $table to $file FAILED"
-  fi
-done
+# Archive tables that might/will get clobbered.
+./archive_tables.sh
+if [[ $? != 0 ]]
+then echo Archive existing tables FAILED
+     exit 1
+fi
 
 echo -n 'Get latest dap_req_block ...'
 # Download new dap_req_block.csv if there is one from OIRA
@@ -68,37 +56,41 @@ echo -n 'Update NYS Institutions ... '
 ./nys_institutions.py
 if [[ $? != 0 ]]
 then echo 'FAILED!'
-     exit 1
+     #  Restore from latest archive
+     restore_from_archive nys_institutions
 else echo 'done.'
 fi
+
 
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
-psql cuny_curriculum -tXc \
+psql cuny_curriculum -tqXc \
 "select update_date from updates where table_name = 'registered_programs'" | pbcopy
-update_date=`pbpaste|tr -d ' '`
-if [[ $update_date == '' ]]
+previous_update_date=`pbpaste|tr -d ' '`
+if [[ $previous_update_date == '' ]]
 then echo -n "(Re-)create the registered_programs table ... "
-     psql -qXd cuny_curriculum -f registered_programs.sql
-else echo -n "Archive registered_programs table $update_date ... "
-     pg_dump cuny_curriculum -t registered_programs > "./archives/registered_programs_${update_date}.sql"
-fi
-if [[ $? == 0 ]]
-then echo done.
-else echo Failed!
-    exit 1
+     psql -tqX cuny_curriculum -f registered_programs.sql
+     previous_update_date=`gdate -I`
 fi
 
 # Generate/update the registered_programs table for all colleges
+update_date=`gdate -I`
 for inst in bar bcc bkl bmc cty csi grd hos htr jjc kcc lag law leh mec ncc nyt qcc qns sps yrk
 do
   python3 registered_programs.py -vu $inst
   if [[ $? != 0 ]]
-  then  echo "Update failed for $inst"
-        exit 1
+  then  echo "Update FAILED for $inst"
+         #  Restore from latest archive
+         restore_from_archive registered_programs
+         update_date=$previous_update_date
+         break
   fi
 done
+# Record the date of this update
+psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
+                        where table_name = 'registered_programs'"
+
 
 # Recreate the requirements_blocks table, using the latest available csv file from OIRA.
 (
@@ -124,9 +116,5 @@ then echo 'FAILED!'
      exit 1
 else echo 'done.'
 fi
-
-# Record the date of this update
-psql cuny_curriculum -Xqc "update updates set update_date = '`gdate -I`' \
-                        where table_name = 'registered_programs'"
 
 echo End update_registered_programs.py at `date`

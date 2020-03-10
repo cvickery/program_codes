@@ -3,13 +3,14 @@
 # Archive that might/will get clobbered. The table must exist and have more than zero rows,
 # and the archive for today must not exist.
 today=`date +%Y-%m-%d`
+unset failure
+
 for table in cip_codes \
 hegis_areas \
 hegis_codes \
 nys_institutions \
 registered_programs \
 requirement_blocks
-unset failure
 do
   n=`psql -tqX cuny_curriculum -c "select count(*) from $table" 2> /dev/null`
   if [[ $? != 0 ]]

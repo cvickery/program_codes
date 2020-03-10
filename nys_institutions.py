@@ -46,11 +46,12 @@ cuny_institutions['yrk'] = ('33500', 'CUNY YORK COLLEGE')
 # Scrape the NYSED website for institution id numbers and names. Sending a POST request with the
 # name "searches" and value "1" gets a page with a form with all institutions and ids as options
 # in a select element.
-r = requests.post('http://www.nysed.gov/coms/rp090/IRPSL1', data={'searches': 1})
+url = 'http://www.nysed.gov/coms/rp090/IRPSL1'
+r = requests.post(url, data={'searches': 1})
 html_document = document_fromstring(r.content)
 option_elements = [option.text_content() for option in html_document.cssselect('option')]
 if len(option_elements) < 100:
-  exit(f'NYS Institutions update failed: expected hundreds, but got {len(option_elements)}.')
+  exit(f'{__file__}: ERROR: got only {len(option_elements)} institutions from {url}.')
 
 conn = PgConnection()
 cursor = conn.cursor()

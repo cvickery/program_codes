@@ -39,27 +39,25 @@ Design Notes
 import sys
 import re
 import argparse
+import csv
+import socket
 from datetime import date
 
 import requests
 from lxml.html import document_fromstring
 import cssselect
 
-import csv
 
 from pgconnection import PgConnection
-
+from sendemail import send_message
 from program import Program
-
-__author__ = 'Christopher Vickery'
-__version__ = 'April 2019'
-
 
 known_institutions = dict()
 conn = PgConnection()
 cursor = conn.cursor()
 cursor.execute("select * from nys_institutions")
-known_institutions = {row.id: (row.institution_id, row.institution_name, row.is_cuny) for row in cursor.fetchall()}
+known_institutions = {row.id: (row.institution_id, row.institution_name, row.is_cuny)
+                      for row in cursor.fetchall()}
 conn.close()
 
 
@@ -107,16 +105,26 @@ def lookup_programs(institution, verbose=False, debug=False):
   # registered for the institution.
   if verbose:
     print(f'Fetching list of registered programs for {institution_name} ...', file=sys.stderr)
-  r = requests.post('http://www.nysed.gov/coms/rp090/IRPS2A', data={'SEARCHES': '1',
-                                                                    'instid': f'{institution_id}'})
-  html_document = document_fromstring(r.content)
+  try:
+    url = 'http://www.nysed.gov/coms/rp090/IRPS2A'
+    r = requests.post(url, data={'SEARCHES': '1', 'instid': f'{institution_id}'})
+    html_document = document_fromstring(r.content)
+    h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
+    if len(h4s) < 4:
+      raise ValueError(f'Got {len(h4s)} H4 elements from {url} for {institution}')
+  except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, ValueError) as err:
+    send_message([{'name': 'Christopher Vickery', 'email': 'cvickery@qc.cuny.edu'}],
+                 {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
+                 f'Registered Programs Update Failed on {socket.gethostname()}',
+                 f'<p>{err}</p>')
+    exit(f'{__file__}: ERROR: {socket.gethostname()} {err}')
+
   # The program codes and unit codes are inside H4 elements, in the following sequence:
   #   PROGRAM CODE  : 36256 - ...
   #   PROGRAM TITLE : [title text] AWARD : [award text]
   #   INST.NAME/CITY .[name and address, ignored].. HEGIS : [hegis string for this award]
   #   FORMATS ... (Not always present.)
   #   UNIT CODE     : OCUE|OP
-  h4s = [h4.text_content() for h4 in html_document.cssselect('h4')]
   this_award = None
   for h4 in h4s:
     if debug:
@@ -193,7 +201,14 @@ def lookup_programs(institution, verbose=False, debug=False):
             end='', file=sys.stderr)
 
     for_award = None
-    r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
+    try:
+      r = requests.get(f'http://www.nysed.gov/COMS/RP090/IRPSL3?PROGCD={program.program_code}')
+    except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as err:
+      send_message([{'name': 'Christopher Vickery', 'email': 'cvickery@qc.cuny.edu'}],
+                   {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
+                   f'Registered Programs Update Failed on {socket.gethostname()}',
+                   f'<p>{err}</p>')
+      exit(f'{__file__}: ERROR: {socket.gethostname()} {err}')
 
     # There was a web page that had a 0x1e in the middle of a string of blanks (program code 31441
     # at CSI), and splitlines() uses this as one of the line boundaries ((Record Separator)), which

@@ -5,8 +5,7 @@ from AdvancedHTMLParser import AdvancedHTMLParser
 import requests
 import socket
 
-import psycopg2
-from psycopg2.extras import NamedTupleCursor
+from pgconnection import PgConnection
 from sendemail import send_message
 
 # Be sure the NYSED website is accessible before proceeding.
@@ -18,10 +17,19 @@ except requests.exceptions.ConnectionError as err:
                {'name': 'Transfer App', 'email': 'cvickery@qc.cuny.edu'},
                f'HEGIS Code Update Failed on {socket.gethostname()}',
                f'<p>{err}</p>')
-  exit()
+  exit(f'HEGIS Code Update Failed on {socket.gethostname()}: <p>{err}</p>')
 
-db = psycopg2.connect('dbname=cuny_curriculum')
-cursor = db.cursor(cursor_factory=NamedTupleCursor)
+parser = AdvancedHTMLParser()
+parser.parseStr(r)
+
+tables = parser.getElementsByTagName('table')
+# There are ten areas as of March 2020. If there are fewer than six consider it an error and do not
+# continue.
+if len(tables) < 6:
+  exit(f'hegis_codes.py: ERROR: Expected at least six tables; got {len(tables)}.')
+
+conn = PgConnection()
+cursor = conn.cursor()
 cursor.execute('drop table if exists hegis_areas, hegis_codes')
 cursor.execute("""
                   create table hegis_areas (
@@ -34,12 +42,8 @@ cursor.execute("""
                   );
                """)
 
-parser = AdvancedHTMLParser()
-parser.parseStr(r)
-
 area_name = None
 area_id = -1
-tables = parser.getElementsByTagName('table')
 for table in tables:
   assert table.children[0].tagName == 'caption'
   area_name = table.children[0].innerText.strip()
@@ -57,5 +61,5 @@ for table in tables:
 changes = parser.getElementsByClassName('pane-node-changed')
 update_date = datetime.strptime(changes[0].children[1].innerText.strip(), '%B %d, %Y - %I:%M%p')
 cursor.execute(f"update updates set update_date = '{update_date}' where table_name = 'hegis_codes'")
-db.commit()
-db.close()
+conn.commit()
+conn.close()
