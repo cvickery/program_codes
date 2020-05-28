@@ -26,7 +26,7 @@ then echo Archive existing tables FAILED
 fi
 
 echo -n 'Get latest dap_req_block ...'
-# Download new dap_req_block.csv if there is one from OIRA
+# Download new dgw_dap_req_block.csv if there is one from OIRA
 if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
 then
       export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
@@ -97,7 +97,7 @@ psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
 (
   cd ./dgw_info
   export latest='./downloads/dap_req_block.csv'
-  if [[ ! -e downloads/dap_req_block.csv ]]
+  if [[ ! -e downloads/dgw_dap_req_block.csv ]]
   then  # Find the latest file in the archives folder
     shopt -s nullglob
     all=(./archives/dap*)
@@ -109,7 +109,7 @@ psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
       exit 1
     else
       latest=${all[$n]}
-      cp $latest ./downloads/dap_req_block.csv
+      cp $latest ./downloads/dgw_dap_req_block.csv
       echo "No new dap_req_block.csv in downloads. Using $latest."
     fi
   fi

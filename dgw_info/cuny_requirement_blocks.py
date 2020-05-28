@@ -112,7 +112,7 @@ def xml_generator(file):
 parser = argparse.ArgumentParser()
 parser.add_argument('-d', '--debug', action='store_true', default=False)
 parser.add_argument('-v', '--verbose', action='store_true', default=False)
-parser.add_argument('-f', '--file', default='./downloads/dap_req_block.csv')
+parser.add_argument('-f', '--file', default='./downloads/dgw_dap_req_block.csv')
 parser.add_argument('-de', '--delimiter', default=',')
 parser.add_argument('-q', '--quotechar', default='"')
 args = parser.parse_args()
