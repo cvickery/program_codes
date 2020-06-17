@@ -93,19 +93,19 @@ psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
                         where table_name = 'registered_programs'"
 
 
-# Recreate the requirements_blocks table, using the latest available csv file from OIRA.
+# Recreate the requirement_blocks table, using the latest available csv file from OIRA.
 (
   cd ./dgw_info
   export latest='./downloads/dap_req_block.csv'
   if [[ ! -e downloads/dgw_dap_req_block.csv ]]
   then  # Find the latest file in the archives folder
     shopt -s nullglob
-    all=(./archives/dap*)
+    all=(./archives/dgw_dap*)
     n=$(( ${#all[@]} - 1 ))
     if (( $n < 0 ))
     then
       latest=''
-      echo "ERROR: no dap_req_block.csv files found"
+      echo "ERROR: no dgw_dap_req_block.csv files found"
       exit 1
     else
       latest=${all[$n]}
