@@ -1,0 +1,26 @@
+#! /usr/local/bin/bash
+
+# This is extracted from ../update_registered_programs.sh for testing purposes.
+
+# Recreate the requirement_blocks table, using the latest available csv file from OIRA.
+(
+  cd /Users/vickery/CUNY_Programs/dgw_info
+  export latest='./downloads/dap_req_block.csv'
+  if [[ ! -e downloads/dgw_dap_req_block.csv ]]
+  then  # Find the latest file in the archives folder
+    shopt -s nullglob
+    all=(./archives/dgw_dap*)
+    n=$(( ${#all[@]} - 1 ))
+    if (( $n < 0 ))
+    then
+      latest=''
+      echo "ERROR: no dgw_dap_req_block.csv files found"
+      exit 1
+    else
+      latest=${all[$n]}
+      cp $latest ./downloads/dgw_dap_req_block.csv
+      echo "No new dap_req_block.csv in downloads. Using $latest."
+    fi
+  fi
+  ./cuny_requirement_blocks.py
+)
