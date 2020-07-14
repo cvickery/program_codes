@@ -58,7 +58,7 @@ def generate_html():
   # Find out what CUNY colleges are in the db
   cursor.execute("""
                  select distinct r.target_institution as inst, i.name
-                 from registered_programs r, cuny_institutions i
+                 from registered_programs r, cuny_institutions i, nys_institutions n
                  where i.code = upper(r.target_institution||'01')
                  order by i.name
                  """)
@@ -67,7 +67,9 @@ def generate_html():
     conn.close()
     exit("There is no registered-program information for CUNY colleges available at this time")
 
-  cuny_institutions = dict([(row.inst, row.name) for row in cursor.fetchall()])
+  cuny_institutions = dict([(row.inst, {'name': row.name})
+                           for row in cursor.fetchall()])
+
   cursor.execute('select hegis_code, description from hegis_codes')
   hegis_codes = {row.hegis_code: row.description for row in cursor.fetchall()}
 
@@ -99,24 +101,34 @@ def generate_html():
                         last_registration_action,
                         tap, apts, vvta,
                         target_institution,
+                        institution_id as sed_code,
                         is_variant
-                 from registered_programs
+                 from registered_programs, nys_institutions
+                 where nys_institutions.id ~* registered_programs.institution
                  order by title, program_code
                  """)
   for row in cursor.fetchall():
     # Parallel structures for the HTML and CSV cells
+
+    # Pick out two parameters for later use
     if row.is_variant:
       class_str = ' class="variant"'
     else:
       class_str = ''
+    sed_code = row.sed_code
+
     html_values = list(row)
     csv_values = list(row)
 
-    # Don’t display is_variant value: it is indicated by the row’s class.
-    # Don’t display institution.
-    html_values.pop()
+    # Get rid of the two parameter values that won't be displayed.
+    #   Don’t display is_variant value: it is indicated by the row’s class.
     html_values.pop()
     csv_values.pop()
+    #   Don’t display the NYSED Institution Code: it will be a hover in the HTML version
+    html_values.pop()
+    csv_values.pop()
+    #   Don’t display the target institution
+    html_values.pop()
     csv_values.pop()
 
     # If the institution column is a numeric string, it’s a non-CUNY partner school, but the
@@ -124,6 +136,8 @@ def generate_html():
     if html_values[2].isdecimal():
       html_values[2] = fix_title(known_institutions[html_values[2]][1])
       csv_values[2] = html_values[2]
+    # Add hover for sed_code
+    html_values[2] = f'<span title="NYSED Institution ID {sed_code}">{html_values[2]}</span>'
 
     # Add title with hegis code description to hegis_code column
     try:
