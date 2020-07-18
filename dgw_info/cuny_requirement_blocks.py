@@ -117,6 +117,7 @@ parser.add_argument('-de', '--delimiter', default=',')
 parser.add_argument('-q', '--quotechar', default='"')
 args = parser.parse_args()
 
+# These are the columns that get initialized here. See cursor.create below for full list of columns.
 db_cols = ['institution',
            'requirement_id',
            'block_type',
@@ -166,7 +167,8 @@ for row in generator(file):
   institutions[institution].rows.append(row)
 
 # Create the requirement_blocks table if it doesn’t already exist
-cursor.execute("""create table if not exists requirement_blocks (
+cursor.execute("""drop table if exists requirement_blocks;
+                  create table requirement_blocks (
                   institution text,
                   requirement_id text,
                   block_type text,
@@ -179,6 +181,9 @@ cursor.execute("""create table if not exists requirement_blocks (
                   concentration text,
                   minor text,
                   requirement_text text,
+                  requirement_html text default 'Not Available',
+                  head_objects jsonb default '[]'::jsonb,
+                  body_objects jsonb default '[]'::jsonb,
                   primary key (institution, requirement_id))""")
 
 # Process the rows from the csv or xml file, institution by institution
