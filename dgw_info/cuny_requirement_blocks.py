@@ -167,7 +167,7 @@ for row in generator(file):
   institutions[institution].rows.append(row)
 
 # Create the requirement_blocks table if it doesn’t already exist
-cursor.execute("""drop table if exists requirement_blocks;
+cursor.execute("""drop table if exists requirement_blocks cascade;
                   create table requirement_blocks (
                   institution text,
                   requirement_id text,
