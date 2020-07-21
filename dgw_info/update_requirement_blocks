@@ -22,6 +22,12 @@
       echo "No new dap_req_block.csv in downloads. Using $latest."
     fi
   fi
+  SECONDS=0
+  echo "Start cuny_requirement_blocks.py"
   ./cuny_requirement_blocks.py
+  SECONDS=0
+  echo "End cuny_requirement_blocks.py after $SECONDS seconds"
+  echo "Start dgw_driver.py"
   /Users/vickery/dgw_processor/dgw_driver.py -i all -t all -v all > /dev/null
+  echo "End dgw_driver.py after $SECONDS seconds"
 )
