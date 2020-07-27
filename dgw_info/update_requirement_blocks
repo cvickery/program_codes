@@ -28,6 +28,6 @@
   SECONDS=0
   echo "End cuny_requirement_blocks.py after $SECONDS seconds"
   echo "Start dgw_driver.py"
-  /Users/vickery/dgw_processor/dgw_driver.py -i all -t all -v all > /dev/null
+  /Users/vickery/dgw_processor/dgw_driver.py -i all -t all -v all
   echo "End dgw_driver.py after $SECONDS seconds"
 )
