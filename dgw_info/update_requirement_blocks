@@ -1,7 +1,5 @@
 #! /usr/local/bin/bash
 
-# This is extracted from ../update_registered_programs.sh for testing purposes.
-
 # Recreate the requirement_blocks table, using the latest available csv file from OIRA.
 (
   cd /Users/vickery/CUNY_Programs/dgw_info
@@ -28,6 +26,7 @@
   SECONDS=0
   echo "End cuny_requirement_blocks.py after $SECONDS seconds"
   echo "Start dgw_driver"
+  export PYTHONPATH=/Users/vickery/dgw_processor:/Users/vickery/Transfer_App
   python3 -m dgw_driver -i all -t all -v all
-  echo "End dgw_driver.py after $SECONDS seconds"
+  echo "End dgw_driver after $SECONDS seconds"
 )
