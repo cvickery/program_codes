@@ -67,7 +67,10 @@ def decruft(block):
       files. But for csv files where strip_files wasn't run, this makes the text cleaner, avoiding
       possible parsing problems.
   """
-  return block.translate(cruft_table)
+  return_block = block.translate(cruft_table)
+  # Replace tabs and single quotes
+  return_block = return_block.replace('\t', ' ').replace("'", '’')
+  return return_block
 
 
 def csv_generator(file):
@@ -117,7 +120,7 @@ parser.add_argument('-de', '--delimiter', default=',')
 parser.add_argument('-q', '--quotechar', default='"')
 args = parser.parse_args()
 
-# These are the columns that get initialized here. See cursor.create below for full list of columns.
+# These are the columns that get initialized here. See cursor.create table for full list of columns.
 db_cols = ['institution',
            'requirement_id',
            'block_type',
@@ -125,10 +128,17 @@ db_cols = ['institution',
            'title',
            'period_start',
            'period_stop',
+           'school',
+           'degree',
+           'college',
            'major1',
            'major2',
            'concentration',
            'minor',
+           'liberal_learning',
+           'specialization',
+           'program',
+           'student_id',
            'requirement_text']
 vals = '%s, ' * len(db_cols)
 vals = '(' + vals.strip(', ') + ')'
@@ -166,7 +176,7 @@ for row in generator(file):
 
   institutions[institution].rows.append(row)
 
-# Create the requirement_blocks table if it doesn’t already exist
+# Recreate the requirement_blocks table
 cursor.execute("""drop table if exists requirement_blocks cascade;
                   create table requirement_blocks (
                   institution text,
@@ -176,10 +186,17 @@ cursor.execute("""drop table if exists requirement_blocks cascade;
                   title text,
                   period_start text,
                   period_stop text,
+                  school text,
+                  degree text,
+                  college text,
                   major1 text,
                   major2 text,
                   concentration text,
                   minor text,
+                  liberal_learning text,
+                  specialization text,
+                  program text,
+                  student_id text,
                   requirement_text text,
                   requirement_html text default 'Not Available',
                   head_objects jsonb default '[]'::jsonb,
@@ -217,28 +234,28 @@ for institution in institutions.keys():
                                  row.requirement_id,
                                  row.block_type,
                                  row.block_value,
-                                 row.title,
+                                 decruft(row.title),
                                  row.period_start,
                                  row.period_stop,
+                                 row.school,
+                                 row.degree,
+                                 row.college,
                                  row.major1,
                                  row.major2,
                                  row.concentration,
                                  row.minor,
-                                 decruft(row.requirement_text.replace('\t', ' '))])
-    set_clause = 'set '
-    set_clause += ', '.join([f'{col} = %s' for col in db_cols])
-    cursor.execute(f"""update requirement_blocks {set_clause}
-                       where requirement_id = %s and institution = %s;
-                       insert into requirement_blocks values {vals}
-                       on conflict do nothing
-                    """, (db_record + (row.requirement_id, institution) + db_record))
-
+                                 row.liberal_learning,
+                                 row.specialization,
+                                 row.program,
+                                 row.student_id,
+                                 decruft(row.requirement_text)])
+    vals = ', '.join([f"'{val}'" for val in db_record])
+    cursor.execute(f'insert into requirement_blocks values ({vals})')
 cursor.execute(f"""update updates
                       set update_date = '{load_date}'
                     where table_name = 'requirement_blocks'""")
 db.commit()
 db.close()
-
 # Archive the file just processed
 file.rename(f'/Users/vickery/CUNY_Programs/dgw_info/archives/'
             f'{file.stem}_{load_date}{file.suffix}')
