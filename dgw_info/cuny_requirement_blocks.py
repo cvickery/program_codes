@@ -154,7 +154,16 @@ Institution = namedtuple('Institution', 'load_date rows')
 
 file = Path(args.file)
 if not file.exists():
-  sys.exit(f'File not found: {file}')
+  # Try the latest archived version
+  archives_dir = Path('/Users/vickery/CUNY_Programs/dgw_info/archives')
+  archives = archives_dir.glob('dgw_dap_req_block*.csv')
+  latest = None
+  for archive in archives:
+    if latest is None or archive.stat().st_mtime > latest.stat().st_mtime:
+      latest = archive
+  if latest is None:
+    sys.exit(f'{file} does not exist, and no archive found')
+  file = latest
 
 if file.suffix.lower() == '.xml':
   generator = xml_generator
@@ -164,6 +173,7 @@ else:
   sys.exit(f'Unsupported file type: {file.suffix}')
 
 # Gather all the rows for all the institutions
+print(f'Using {file.name}')
 for row in generator(file):
   institution = row.institution.upper()
 
@@ -202,6 +212,31 @@ cursor.execute("""drop table if exists requirement_blocks cascade;
                   head_objects jsonb default '[]'::jsonb,
                   body_objects jsonb default '[]'::jsonb,
                   primary key (institution, requirement_id))""")
+
+# Add the view, which omits the requirement_text, requirement_html, and object lists.
+cursor.execute("""
+drop view if exists view_requirement_blocks;
+create view view_requirement_blocks as (
+  select  institution,
+           requirement_id,
+           block_type,
+           block_value,
+           title,
+           period_start,
+           period_stop,
+           school,
+           degree,
+           college,
+           major1,
+           major2,
+           concentration,
+           minor,
+           liberal_learning,
+           specialization,
+           program
+  from requirement_blocks
+  order by institution, requirement_id, block_type, block_value, period_stop);
+""")
 
 # Process the rows from the csv or xml file, institution by institution
 for institution in institutions.keys():
@@ -256,6 +291,7 @@ cursor.execute(f"""update updates
                     where table_name = 'requirement_blocks'""")
 db.commit()
 db.close()
-# Archive the file just processed
-file.rename(f'/Users/vickery/CUNY_Programs/dgw_info/archives/'
-            f'{file.stem}_{load_date}{file.suffix}')
+# Archive the file just processed, unless it's already there
+if file.parent.name != 'archives':
+  file.rename(f'/Users/vickery/CUNY_Programs/dgw_info/archives/'
+              f'{file.stem}_{load_date}{file.suffix}')
