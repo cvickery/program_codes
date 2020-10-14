@@ -2,6 +2,24 @@
 
 # Recreate the requirement_blocks table, using the latest available csv file from OIRA.
 (
+  # Command line option to skip download step
+  if [[ $# -gt 0 &&  ( "$1" == "--skip-download") || ( "$1" == "-sd" ) ]]
+  then echo 'Skip download step'
+  else
+    echo -n 'Get latest dap_req_block ...'
+    # Download new dgw_dap_req_block.csv if there is one from OIRA
+    if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
+    then
+          export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
+          /usr/local/bin/lftp -f ./getcunyrc
+          if [[ $? != 0 ]]
+          then echo Download failed
+               exit
+          fi
+    fi
+    echo done
+  fi
+
   cd /Users/vickery/CUNY_Programs/dgw_info
   export latest='./downloads/dap_req_block.csv'
   if [[ ! -e downloads/dgw_dap_req_block.csv ]]

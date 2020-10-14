@@ -25,15 +25,6 @@ then echo Archive existing tables FAILED
      exit 1
 fi
 
-echo -n 'Get latest dap_req_block ...'
-# Download new dgw_dap_req_block.csv if there is one from OIRA
-if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
-then
-      export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
-      /usr/local/bin/lftp -f ./getcunyrc
-fi
-echo done
-
 # Copy IPEDS CIP codes to the cip_codes table.
 echo -n 'Recreate CIP Codes table ... '
 ./cip_codes.py
