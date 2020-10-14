@@ -62,6 +62,7 @@
   # Update the db using the info in the csv file set up in previous stage
   echo "Start cuny_requirement_blocks.py"
   SECONDS=0
+
   ./cuny_requirement_blocks.py -v
   echo "End cuny_requirement_blocks.py after $SECONDS seconds."
 
