@@ -1,6 +1,7 @@
 #! /usr/local/bin/python3
 
 """ Add "Except" phrase to MinGrade rules for Spring 2020.
+    Not adopted in this form by CUNY, but retained for historical record.
 """
 import re
 import sys

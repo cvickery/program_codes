@@ -2,49 +2,67 @@
 
 # Recreate the requirement_blocks table, using the latest available csv file from OIRA.
 (
+  # Be sure we are in the correct place in the filesystsm
+  cd /Users/vickery/CUNY_Programs/dgw_info
+
+  # Find the latest archived file
+  export current_download_file='./downloads/dgw_dap_req_block.csv'
+  export latest_archive_file=''
+    shopt -s nullglob
+    all=(./archives/dgw_dap*)
+    n=$(( ${#all[@]} - 1 ))
+    if (( $n > -1 ))
+    then
+      latest_archive_file=${all[$n]}
+    fi
+
   # Command line option to skip download step
   if [[ $# -gt 0 &&  ( "$1" == "--skip-download") || ( "$1" == "-sd" ) ]]
   then echo 'Skip download step'
   else
-    echo -n 'Get latest dap_req_block ...'
-    # Download new dgw_dap_req_block.csv if there is one from OIRA
-    if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
+    echo -n 'Get latest dap_req_block ... '
+    # Download new dgw_dap_req_block.csv if Tumbleweed access is possible and there is one from OIRA
+    if [[`hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
     then
-          export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
+          #export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
           /usr/local/bin/lftp -f ./getcunyrc
           if [[ $? != 0 ]]
           then echo Download failed
-               exit
+               echo Notice from `hostname` > ./notification_msg
+               /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
+               -t ./notification_msg cvickery@qc.cuny.edu
+               rm ./notification_msg
+          else echo done
           fi
+    else echo "unable to access Tumbleweed from `hostname`."
     fi
-    echo done
+  fi
+    # Sanity check on file size. Should be within 10% of latest
+    size_download=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $current_download_file`
+    size_latest=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $latest_archive_file`
+    if [[ `echo "define abs(x) {if (x < 0) return (-x) else return (x)}; scale=6; \
+                (abs(($size_download - $size_latest) / $size_latest) > 0.1)" | bc` != 0 ]]
+    then
+      printf "Downloaded size (%'d bytes) is over 10 percent different " $size_download
+      printf "from latest archive size (%'d bytes).\n" $size_latest
+      ls -lh $latest_archive_file ./downloads
+      echo "Discarding lousy download"
+      rm $current_download_file
+    fi
+
+  # Pick the csv file to work with: either the newly-downloaded one or the most-recent archived one.
+  if [[ ! -e downloads/dgw_dap_req_block.csv ]]
+  then
+      # No download available, so copy latest archived file back to downloads for use in the next
+      # stage.
+      cp $latest_archive_file ./downloads/dgw_dap_req_block.csv
+      echo "No ./downloads/dap_req_block.csv available. Substituting $latest_archive_file."
   fi
 
-  cd /Users/vickery/CUNY_Programs/dgw_info
-  export latest='./downloads/dap_req_block.csv'
-  if [[ ! -e downloads/dgw_dap_req_block.csv ]]
-  then  # Find the latest file in the archives folder
-    shopt -s nullglob
-    all=(./archives/dgw_dap*)
-    n=$(( ${#all[@]} - 1 ))
-    if (( $n < 0 ))
-    then
-      latest=''
-      echo "ERROR: no dgw_dap_req_block.csv files found"
-      exit 1
-    else
-      latest=${all[$n]}
-      cp $latest ./downloads/dgw_dap_req_block.csv
-      echo "No new dap_req_block.csv in downloads. Using $latest."
-    fi
-  fi
-  SECONDS=0
+  # Update the db using the info in the csv file set up in previous stage
   echo "Start cuny_requirement_blocks.py"
-  ./cuny_requirement_blocks.py
   SECONDS=0
-  echo "End cuny_requirement_blocks.py after $SECONDS seconds"
-  echo "Start dgw_driver"
-  export PYTHONPATH=/Users/vickery/dgw_processor:/Users/vickery/Transfer_App
-  python3 -m dgw_driver -i all -t all -v all
-  echo "End dgw_driver after $SECONDS seconds"
+  ./cuny_requirement_blocks.py -v
+  echo "End cuny_requirement_blocks.py after $SECONDS seconds."
+
 )

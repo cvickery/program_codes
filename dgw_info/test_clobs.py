@@ -1,7 +1,7 @@
 #! /usr/local/bin/python3
 """ Tell the sizes of CLOBS and whether or not they have END. lines
-    Used for integrity checks back in the days when the export form SQL Developer was truncating
-    them.
+    Used for integrity checks back in the days when the export from SQL Developer was truncating
+    them. Now it could be used as a general integrity check. But it isn't.
 """
 
 
