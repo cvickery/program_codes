@@ -46,8 +46,10 @@
       printf "Downloaded size (%'d bytes) is over 10 percent different " $size_download
       printf "from latest archive size (%'d bytes).\n" $size_latest
       ls -lh $latest_archive_file ./downloads
-      echo "Discarding lousy download"
-      rm $current_download_file
+      if [[ -e $current_download_file ]]
+      then echo "Discarding lousy download"
+           rm -f $current_download_file
+      fi
     fi
 
   # Pick the csv file to work with: either the newly-downloaded one or the most-recent archived one.
