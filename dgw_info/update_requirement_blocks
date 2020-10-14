@@ -16,6 +16,8 @@
           then echo Download failed
                exit
           fi
+          # Check file is "big enough" and delete it if not
+
     fi
     echo done
   fi
@@ -43,6 +45,7 @@
   ./cuny_requirement_blocks.py
   SECONDS=0
   echo "End cuny_requirement_blocks.py after $SECONDS seconds"
+
   echo "Start dgw_driver"
   export PYTHONPATH=/Users/vickery/dgw_processor:/Users/vickery/Transfer_App
   python3 -m dgw_driver -i all -t all -v all
