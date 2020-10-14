@@ -20,7 +20,7 @@
   if [[ $# -gt 0 &&  ( "$1" == "--skip-download") || ( "$1" == "-sd" ) ]]
   then echo 'Skip download step'
   else
-    echo -n 'Get latest dap_req_block ... '
+    echo 'Get latest dap_req_block ... '
     # Download new dgw_dap_req_block.csv if Tumbleweed access is possible and there is one from OIRA
     if [[ `hostname` != 'cvlaptop.local' && `hostname` != 'cvhome.local' ]]
     then
@@ -32,7 +32,7 @@
                /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
                -t ./notification_msg cvickery@qc.cuny.edu
                rm ./notification_msg
-          else echo done
+          else echo '... done.'
           fi
     else echo "unable to access Tumbleweed from `hostname`."
     fi
