@@ -8,8 +8,8 @@ function restore_from_archive()
   then echo "RESTORING ${archives[$n-1]}"
       (
         export PGOPTIONS='--client-min-messages=warning'
-        psql -tqX cuny_curriculum -c "drop table if exists $1 cascade"
-        psql -tqX cuny_curriculum < ${archives[$n-1]}
+        /usr/local/bin/psql -tqX cuny_curriculum -c "drop table if exists $1 cascade"
+        /usr/local/bin/psql -tqX cuny_curriculum < ${archives[$n-1]}
       )
   else echo "ERROR: Unable to restore $1."
       exit 1
@@ -57,12 +57,12 @@ fi
 # Update the registered_programs table
 
 # Create the table if it does not exist yet.
-psql cuny_curriculum -tqXc \
+/usr/local/bin/psql cuny_curriculum -tqXc \
 "select update_date from updates where table_name = 'registered_programs'" | pbcopy
 previous_update_date=`pbpaste|tr -d ' '`
 if [[ $previous_update_date == '' ]]
 then echo -n "(Re-)create the registered_programs table ... "
-     psql -tqX cuny_curriculum -f registered_programs.sql
+     /usr/local/bin/psql -tqX cuny_curriculum -f registered_programs.sql
      previous_update_date=`gdate -I`
 fi
 
@@ -80,7 +80,7 @@ do
   fi
 done
 # Record the date of this update
-psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
+/usr/local/bin/psql cuny_curriculum -tqXc "update updates set update_date = '$update_date' \
                         where table_name = 'registered_programs'"
 
 

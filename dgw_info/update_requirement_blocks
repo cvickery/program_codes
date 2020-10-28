@@ -27,11 +27,7 @@
           #export LFTP_PASSWORD=`cat /Users/vickery/.lftpwd`
           /usr/local/bin/lftp -f ./getcunyrc
           if [[ $? != 0 ]]
-          then echo Download failed
-               echo Notice from `hostname` > ./notification_msg
-               /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
-               -t ./notification_msg cvickery@qc.cuny.edu
-               rm ./notification_msg
+          then echo Download failed!
           else echo '... done.'
           fi
     else echo "unable to access Tumbleweed from `hostname`."
@@ -43,7 +39,14 @@
     if [[ `echo "define abs(x) {if (x < 0) return (-x) else return (x)}; scale=6; \
                 (abs(($size_download - $size_latest) / $size_latest) > 0.1)" | bc` != 0 ]]
     then
-      printf "Downloaded size (%'d bytes) is over 10 percent different " $size_download
+         echo Notice from `hostname` > msg
+         printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download >> msg
+         printf "from latest archive size (%'d bytes).\n" $size_latest >> msg
+         /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
+         -t msg cvickery@qc.cuny.edu
+         rm msg
+
+      printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download
       printf "from latest archive size (%'d bytes).\n" $size_latest
       ls -lh $latest_archive_file ./downloads
       if [[ -e $current_download_file ]]

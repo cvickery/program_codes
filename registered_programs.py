@@ -36,17 +36,18 @@ Design Notes
     strings because that is how they arrive and that is how they are always used/displayed.
 
 """
-import sys
-import re
 import argparse
 import csv
+import os
+import re
 import socket
+import sys
+
 from datetime import date
 
 import requests
 from lxml.html import document_fromstring
 import cssselect
-
 
 from pgconnection import PgConnection
 from sendemail import send_message
@@ -196,7 +197,7 @@ def lookup_programs(institution, verbose=False, debug=False):
   for p in Program.programs:
     program = Program.programs[p]
     programs_counter += 1
-    if verbose:
+    if verbose and os.isatty(sys.stdout.fileno()):
       print(f'Program code: {p} ({programs_counter:{len_num}}/{num_programs})\r',
             end='', file=sys.stderr)
 
