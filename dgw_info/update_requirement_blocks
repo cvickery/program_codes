@@ -33,25 +33,28 @@
     else echo "unable to access Tumbleweed from `hostname`."
     fi
   fi
-    # Sanity check on file size. Should be within 10% of latest
-    size_download=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $current_download_file`
-    size_latest=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $latest_archive_file`
-    if [[ `echo "define abs(x) {if (x < 0) return (-x) else return (x)}; scale=6; \
-                (abs(($size_download - $size_latest) / $size_latest) > 0.1)" | bc` != 0 ]]
+    # Sanity check on file size. Should be within 10% of latest ... if there is a download
+    if [[ -e $current_download_file ]]
     then
-         echo Notice from `hostname` > msg
-         printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download >> msg
-         printf "from latest archive size (%'d bytes).\n" $size_latest >> msg
-         /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
-         -t msg cvickery@qc.cuny.edu
-         rm msg
+      size_download=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $current_download_file`
+      size_latest=`/usr/local/opt/coreutils/libexec/gnubin/stat -c %s $latest_archive_file`
+      if [[ `echo "define abs(x) {if (x < 0) return (-x) else return (x)}; scale=6; \
+                  (abs(($size_download - $size_latest) / $size_latest) > 0.1)" | bc` != 0 ]]
+      then
+           echo Notice from `hostname` > msg
+           printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download >> msg
+           printf "from latest archive size (%'d bytes).\n" $size_latest >> msg
+           /Users/vickery/bin/sendemail -s "dgw_dap_req_block.csv download failed" \
+           -t msg cvickery@qc.cuny.edu
+           rm msg
 
-      printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download
-      printf "from latest archive size (%'d bytes).\n" $size_latest
-      ls -lh $latest_archive_file ./downloads
-      if [[ -e $current_download_file ]]
-      then echo "Discarding lousy download"
-           rm -f $current_download_file
+        printf "Downloaded size (%'d bytes) is over 10 percent different \n" $size_download
+        printf "from latest archive size (%'d bytes).\n" $size_latest
+        ls -lh $latest_archive_file ./downloads
+        if [[ -e $current_download_file ]]
+        then echo "Discarding lousy download"
+             rm -f $current_download_file
+        fi
       fi
     fi
 
