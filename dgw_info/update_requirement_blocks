@@ -5,8 +5,10 @@
   # Be sure we are in the correct place in the filesystsm
   cd /Users/vickery/CUNY_Programs/dgw_info
 
-  # Find the latest archived file
+  # Where the latest download will appear
   export current_download_file='./downloads/dgw_dap_req_block.csv'
+
+  # Find the latest archived file
   export latest_archive_file=''
     shopt -s nullglob
     all=(./archives/dgw_dap*)
