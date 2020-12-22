@@ -305,8 +305,8 @@ cursor.execute("""drop table if exists requirement_blocks cascade;
                   student_id text,
                   requirement_text text,
                   requirement_html text default 'Not Available',
-                  head_objects jsonb default '[]'::jsonb,
-                  body_objects jsonb default '[]'::jsonb,
+                  header_list jsonb default '[]'::jsonb,
+                  body_list jsonb default '[]'::jsonb,
                   primary key (institution, requirement_id))""")
 
 # Add the view, which omits the requirement_text, requirement_html, and object lists.
